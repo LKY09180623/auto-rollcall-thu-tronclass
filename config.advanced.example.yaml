@@ -1,0 +1,37 @@
+# Copy to config.advanced.yaml for local configuration, or mount it at runtime.
+# Credentials and account identities belong in environment variables.
+time:
+  timezone: Asia/Taipei
+operating:
+  0:
+    enable: true
+    range: ["07:00", "18:00"]
+  1:
+    enable: true
+    range: ["07:00", "18:00"]
+  2:
+    enable: true
+    range: ["07:00", "18:00"]
+  3:
+    enable: true
+    range: ["07:00", "18:00"]
+  4:
+    enable: true
+    range: ["07:00", "18:00"]
+  5:
+    enable: false
+    range: ["00:00", "00:00"]
+  6:
+    enable: false
+    range: ["00:00", "00:00"]
+integrations:
+  discord:
+    enable: true
+    token_env: DISCORD_BOT_TOKEN
+    application_id_env: DISCORD_APPLICATION_ID
+    guild_id_env: DISCORD_GUILD_ID
+    channel_env: DISCORD_CHANNEL_ID
+    ephemeral_replies: true
+  admins:
+    discord: []
+  bindings: {}

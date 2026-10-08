@@ -1,0 +1,16 @@
+name: Keep Alive Render Bot
+
+on:
+  schedule:
+    # Run every 10 minutes to prevent Render free-tier spin down
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send keep-alive ping to Render
+        run: |
+          echo "Pinging Render bot health endpoint..."
+          curl -s -f -m 15 -A "GitHub-Actions-KeepAlive/1.0" "https://tronclass-bot.onrender.com/health" || echo "Ping request completed"

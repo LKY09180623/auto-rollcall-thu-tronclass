@@ -1,0 +1,17 @@
+# Allow only runtime source and the credential-free default configuration.
+# Local settings are supplied at runtime, never copied into an image layer.
+**
+!Dockerfile
+!requirements.txt
+!render_start.py
+!troTHU/
+!troTHU/**
+!scanner_app/
+!scanner_app/**
+!scripts/
+!scripts/**
+!probe_daemon.py
+!config.advanced.example.yaml
+**/__pycache__/
+**/*.pyc
+**/*.pyo

@@ -1,0 +1,97 @@
+# Python caches and local virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+env/
+
+# Tooling, editor, and temporary test output
+.vscode/
+.idea/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.test-deps/
+.tmp-tests/
+tmp/
+tmp*/
+
+# Environment files and local secrets
+.env
+.env.*
+!.env.example
+*.env
+*.local
+*.local.*
+*.secret
+*.secrets
+*.token
+*.key
+*.pem
+*.p12
+*.pfx
+/config.yaml
+
+# Local runtime state. These may contain cookies, logs, validation records,
+# user-specific QR/session metadata, or other private diagnostics.
+log/
+log_/
+state/
+cookies/
+config-full-backup-*.yaml
+config-broken-*.yaml
+dynamic_accounts.json
+probe_log.jsonl
+probe_status.json
+
+# Local release/build artifacts. Rebuild with:
+#   python -m troTHU.tron release-build --execute --json
+build/
+dist/
+*.spec.tmp
+RELEASE_NOTES-v*.md
+
+# Local Codex/user planning material. Do not publish these.
+.codex-worklog.md
+AGENTS.md
+CLAUDE.md
+PLAN.md
+*-promotion-plan.md
+新文件*.txt
+競品分析與上位替代規劃.md
+
+# External reference projects are kept locally for Codex analysis only.
+其他專案參考/
+
+# Local reverse-engineering reference (decompiled app + web frontend dumps).
+# Kept locally for analysis only; never publish or commit.
+APP和網頁前端/
+
+# Local/private live school verification helpers.
+# These call real-school flows through TRON_USER / TRON_PASS and are not
+# part of the public source tree.
+test_app_runtime.py
+tests/_credentials.py
+tests/debug_login.py
+tests/test_aiohttp_cookies.py
+tests/test_aiohttp_full.py
+tests/test_aiohttp_login.py
+tests/test_apis.js
+tests/test_courses.js
+tests/test_login.js
+tests/test_login.py
+tests/test_login2.py
+tests/test_login3.js
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Source archives / raw re-captures. The de-identified reverse-engineering tree
+# under "tronclass_reverse_engineering - share_release/" is intentionally tracked,
+# but compressed source archives and fresh raw captures must not be committed.
+*.7z
+tests/test_rollcalls.js

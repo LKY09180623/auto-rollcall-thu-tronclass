@@ -1,0 +1,4340 @@
+<!DOCTYPE html>
+
+<html lang="zh-TW">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <meta name="theme-color" content="#090d16">
+
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <title>儀表板</title>
+
+    <style>
+
+        :root {
+
+            --bg: #090d16;
+
+            --surface: #111827;
+
+            --surface-hover: #1f2937;
+
+            --border: rgba(255, 255, 255, 0.08);
+
+            --border-hover: rgba(59, 130, 246, 0.4);
+
+            --primary: #3b82f6;
+
+            --primary-glow: rgba(59, 130, 246, 0.25);
+
+            --success: #10b981;
+
+            --danger: #ef4444;
+
+            --warning: #f59e0b;
+
+            --text: #f9fafb;
+
+            --text-muted: #9ca3af;
+
+        }
+
+
+
+        * {
+
+            box-sizing: border-box;
+
+            margin: 0;
+
+            padding: 0;
+
+            -webkit-tap-highlight-color: transparent;
+
+        }
+
+
+
+        body {
+
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+            background-color: var(--bg);
+
+            color: var(--text);
+
+            min-height: 100vh;
+
+            padding: 12px;
+
+            display: flex;
+
+            flex-direction: column;
+
+            align-items: center;
+
+        }
+
+
+
+        .app-container {
+
+            width: 100%;
+
+            max-width: 520px;
+
+            display: flex;
+
+            flex-direction: column;
+
+            gap: 12px;
+
+        }
+
+
+
+        /* Header */
+
+        header {
+
+            display: flex;
+
+            justify-content: space-between;
+
+            align-items: center;
+
+            padding: 4px 2px;
+
+        }
+
+
+
+        .brand-title {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 8px;
+
+        }
+
+
+
+        .header-actions {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 6px;
+
+        }
+
+
+
+        .status-pill {
+
+            display: inline-flex;
+
+            align-items: center;
+
+            gap: 6px;
+
+            padding: 4px 10px;
+
+            border-radius: 9999px;
+
+            font-size: 0.76rem;
+
+            font-weight: 600;
+
+            background: rgba(16, 185, 129, 0.12);
+
+            color: var(--success);
+
+            border: 1px solid rgba(16, 185, 129, 0.25);
+
+        }
+
+
+
+        .status-pill.offline {
+
+            background: rgba(239, 68, 68, 0.12);
+
+            color: var(--danger);
+
+            border-color: rgba(239, 68, 68, 0.25);
+
+        }
+
+
+
+        .status-dot {
+
+            width: 7px;
+
+            height: 7px;
+
+            border-radius: 50%;
+
+            background-color: currentColor;
+
+            box-shadow: 0 0 6px currentColor;
+
+        }
+
+
+
+        .btn-header {
+
+            display: inline-flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            padding: 5px 11px;
+
+            border-radius: 9999px;
+
+            border: 1px solid rgba(59, 130, 246, 0.35);
+
+            background: rgba(59, 130, 246, 0.12);
+
+            color: #93c5fd;
+
+            font-size: 0.8rem;
+
+            font-weight: 600;
+
+            cursor: pointer;
+
+            transition: all 0.2s;
+
+        }
+
+
+
+        .btn-header:hover {
+
+            background: rgba(59, 130, 246, 0.25);
+
+            color: #fff;
+
+        }
+
+
+
+        @keyframes spin {
+
+            from { transform: rotate(0deg); }
+
+            to { transform: rotate(360deg); }
+
+        }
+
+
+
+        .spin {
+
+            display: inline-block;
+
+            animation: spin 0.7s linear infinite;
+
+        }
+
+
+
+        /* Toast */
+
+        .toast {
+
+            display: none;
+
+            padding: 10px 14px;
+
+            border-radius: 10px;
+
+            font-size: 0.85rem;
+
+            font-weight: 600;
+
+            text-align: center;
+
+            animation: fadeIn 0.2s ease;
+
+        }
+
+
+
+        .toast.success { display: block; background: rgba(16, 185, 129, 0.15); border: 1px solid var(--success); color: #34d399; }
+
+        .toast.error { display: block; background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); color: #f87171; }
+
+        .toast.loading { display: block; background: rgba(59, 130, 246, 0.15); border: 1px solid var(--primary); color: #60a5fa; }
+
+
+
+        /* Quick Rollcall Input Bar */
+
+        .quick-bar {
+
+            background: var(--surface);
+
+            border: 1px solid var(--border);
+
+            border-radius: 14px;
+
+            padding: 8px;
+
+            display: flex;
+
+            flex-direction: column;
+
+            gap: 8px;
+
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+
+        }
+
+
+
+        .active-prompt {
+
+            background: rgba(59, 130, 246, 0.12);
+
+            border: 1px solid var(--primary);
+
+            border-radius: 14px;
+
+            padding: 12px;
+
+            display: flex;
+
+            flex-direction: column;
+
+            gap: 8px;
+
+        }
+
+
+
+        .active-prompt[hidden] { display: none; }
+
+        .active-prompt [hidden] { display: none; }
+
+        .active-prompt-title { font-size: 0.9rem; font-weight: 700; color: #bfdbfe; }
+
+        .active-prompt-hint { font-size: 0.76rem; color: var(--text-muted); }
+
+        .active-prompt-feedback { font-size: 0.78rem; color: #fde68a; min-height: 1em; }
+
+
+
+        .quick-row {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 6px;
+
+        }
+
+
+
+        .target-select {
+
+            background: #090d16;
+
+            border: 1px solid var(--border);
+
+            border-radius: 9px;
+
+            color: #93c5fd;
+
+            font-size: 0.82rem;
+
+            font-weight: 600;
+
+            padding: 8px 6px;
+
+            outline: none;
+
+            max-width: 105px;
+
+            cursor: pointer;
+
+        }
+
+
+
+        .target-select option {
+
+            background: #111827;
+
+            color: #fff;
+
+        }
+
+
+
+        .quick-input {
+
+            flex: 1;
+
+            min-width: 0;
+
+            background: #090d16;
+
+            border: 1px solid var(--border);
+
+            border-radius: 9px;
+
+            color: #fff;
+
+            font-size: 0.92rem;
+
+            padding: 8px 10px;
+
+            outline: none;
+
+        }
+
+
+
+        .quick-input:focus {
+
+            border-color: var(--primary);
+
+        }
+
+
+
+        .btn-submit {
+
+            padding: 8px 14px;
+
+            border-radius: 9px;
+
+            border: none;
+
+            background: var(--primary);
+
+            color: #fff;
+
+            font-size: 0.86rem;
+
+            font-weight: 700;
+
+            cursor: pointer;
+
+            white-space: nowrap;
+
+            transition: all 0.15s;
+
+        }
+
+
+
+        .btn-submit:active {
+
+            transform: scale(0.97);
+
+        }
+
+
+
+        .btn-icon {
+
+            padding: 8px 10px;
+
+            border-radius: 9px;
+
+            border: 1px solid var(--border);
+
+            background: rgba(255, 255, 255, 0.05);
+
+            color: var(--text);
+
+            font-size: 0.82rem;
+
+            font-weight: 600;
+
+            cursor: pointer;
+
+            display: inline-flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            transition: all 0.15s;
+
+        }
+
+
+
+        .btn-icon:hover {
+
+            background: rgba(255, 255, 255, 0.1);
+
+        }
+
+
+
+        /* Collapsible Scanner */
+
+        #scannerCollapse {
+
+            display: none;
+
+            flex-direction: column;
+
+            gap: 8px;
+
+            margin-top: 4px;
+
+        }
+
+
+
+        #reader-wrapper {
+
+            position: relative;
+
+            width: 100%;
+
+            border-radius: 12px;
+
+            overflow: hidden;
+
+            background: #000;
+
+            border: 1px solid var(--border);
+
+            min-height: 260px;
+
+            touch-action: none;
+
+        }
+
+
+
+        #reader video {
+
+            width: 100% !important;
+
+            height: auto !important;
+
+            border-radius: 12px;
+
+            object-fit: cover;
+
+            transition: transform 0.15s ease-out;
+
+        }
+
+
+
+        /* Viewfinder reticle overlay */
+
+        .scanner-reticle {
+
+            position: absolute;
+
+            inset: 12px;
+
+            pointer-events: none;
+
+            z-index: 10;
+
+        }
+
+
+
+        .reticle-corner {
+
+            position: absolute;
+
+            width: 22px;
+
+            height: 22px;
+
+            border-color: #3b82f6;
+
+            border-style: solid;
+
+            filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.8));
+
+        }
+
+
+
+        .reticle-corner.tl { top: 0; left: 0; border-width: 3px 0 0 3px; border-top-left-radius: 6px; }
+
+        .reticle-corner.tr { top: 0; right: 0; border-width: 3px 3px 0 0; border-top-right-radius: 6px; }
+
+        .reticle-corner.bl { bottom: 0; left: 0; border-width: 0 0 3px 3px; border-bottom-left-radius: 6px; }
+
+        .reticle-corner.br { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-bottom-right-radius: 6px; }
+
+
+
+        .reticle-laser {
+
+            position: absolute;
+
+            left: 5%;
+
+            right: 5%;
+
+            height: 2px;
+
+            background: linear-gradient(90deg, transparent, #3b82f6, #60a5fa, #3b82f6, transparent);
+
+            box-shadow: 0 0 12px #3b82f6;
+
+            animation: laserScan 2.4s ease-in-out infinite;
+
+        }
+
+
+
+        @keyframes laserScan {
+
+            0%, 100% { top: 10%; opacity: 0.3; }
+
+            50% { top: 85%; opacity: 1; }
+
+        }
+
+
+
+        .zoom-badge {
+
+            position: absolute;
+
+            bottom: 12px;
+
+            right: 12px;
+
+            background: rgba(0, 0, 0, 0.65);
+
+            border: 1px solid rgba(255, 255, 255, 0.15);
+
+            color: #93c5fd;
+
+            font-size: 0.72rem;
+
+            font-weight: 700;
+
+            padding: 3px 8px;
+
+            border-radius: 9999px;
+
+            z-index: 12;
+
+            pointer-events: none;
+
+            backdrop-filter: blur(4px);
+
+        }
+
+
+
+        .scanner-tools {
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: space-between;
+
+            gap: 6px;
+
+            flex-wrap: wrap;
+
+        }
+
+
+
+        .zoom-group {
+
+            display: flex;
+
+            gap: 4px;
+
+        }
+
+
+
+        .zoom-btn {
+
+            padding: 5px 9px;
+
+            background: rgba(255, 255, 255, 0.06);
+
+            border: 1px solid var(--border);
+
+            border-radius: 6px;
+
+            color: #fff;
+
+            font-size: 0.75rem;
+
+            font-weight: 600;
+
+            cursor: pointer;
+
+            transition: all 0.15s;
+
+        }
+
+
+
+        .zoom-btn.active {
+
+            background: var(--primary);
+
+            border-color: var(--primary);
+
+        }
+
+
+
+        .zoom-btn:hover {
+
+            background: rgba(255, 255, 255, 0.12);
+
+        }
+
+
+
+        .scan-opt-label {
+
+            display: inline-flex;
+
+            align-items: center;
+
+            gap: 4px;
+
+            font-size: 0.73rem;
+
+            color: var(--text-muted);
+
+            cursor: pointer;
+
+            user-select: none;
+
+        }
+
+
+
+        /* Accounts Dashboard List */
+
+        .accounts-list {
+
+            display: flex;
+
+            flex-direction: column;
+
+            gap: 8px;
+
+        }
+
+
+
+        .account-card {
+
+            background: var(--surface);
+
+            border: 1px solid var(--border);
+
+            border-radius: 14px;
+
+            padding: 12px 14px;
+
+            display: flex;
+
+            flex-direction: column;
+
+            gap: 8px;
+
+            transition: all 0.2s;
+
+        }
+
+
+
+        .account-card.active {
+
+            border-color: var(--warning);
+
+            background: rgba(245, 158, 11, 0.08);
+
+            box-shadow: 0 0 12px rgba(245, 158, 11, 0.2);
+
+        }
+
+
+
+        .account-card.confirmed {
+
+            border-color: var(--success);
+
+            background: rgba(16, 185, 129, 0.06);
+
+        }
+
+
+
+        .account-card.paused {
+
+            opacity: 0.6;
+
+            border-style: dashed;
+
+            border-color: rgba(255, 255, 255, 0.12);
+
+            background: rgba(255, 255, 255, 0.015);
+
+        }
+
+
+
+        .account-card.paused:hover {
+
+            opacity: 0.9;
+
+        }
+
+
+
+        .acc-top {
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: space-between;
+
+        }
+
+
+
+        .acc-user-row {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 8px;
+
+        }
+
+
+
+        .acc-dot {
+
+            width: 8px;
+
+            height: 8px;
+
+            border-radius: 50%;
+
+            background-color: var(--success);
+
+        }
+
+
+
+        .acc-dot.active { background-color: var(--warning); box-shadow: 0 0 8px var(--warning); }
+
+        .acc-dot.warn { background-color: var(--warning); }
+
+        .acc-dot.bad { background-color: var(--danger); box-shadow: 0 0 6px var(--danger); }
+
+        .acc-dot.paused { background-color: #64748b; box-shadow: none; }
+
+
+
+        .acc-name {
+
+            font-size: 0.95rem;
+
+            font-weight: 700;
+
+            color: #fff;
+
+        }
+
+
+
+        .acc-badge {
+
+            font-size: 0.74rem;
+
+            font-weight: 600;
+
+            padding: 3px 8px;
+
+            border-radius: 6px;
+
+            background: rgba(255, 255, 255, 0.06);
+
+            color: var(--text-muted);
+
+        }
+
+
+
+        .acc-badge.active {
+
+            background: rgba(245, 158, 11, 0.2);
+
+            color: #fde68a;
+
+            border: 1px solid rgba(245, 158, 11, 0.4);
+
+        }
+
+
+
+        .acc-badge.confirmed {
+
+            background: rgba(16, 185, 129, 0.15);
+
+            color: #6ee7b7;
+
+            border: 1px solid rgba(16, 185, 129, 0.3);
+
+        }
+
+
+
+        .acc-badge.paused {
+
+            background: rgba(100, 116, 139, 0.16);
+
+            color: #94a3b8;
+
+            border: 1px solid rgba(100, 116, 139, 0.25);
+
+        }
+
+
+
+        .acc-live-return {
+
+            font-size: 0.75rem;
+
+            padding: 4px 8px;
+
+            border-radius: 6px;
+
+            background: rgba(59, 130, 246, 0.12);
+
+            border: 1px solid rgba(59, 130, 246, 0.25);
+
+            color: #93c5fd;
+
+            word-break: break-all;
+
+            animation: fadeIn 0.15s ease;
+
+        }
+
+
+
+        .acc-live-return.success {
+
+            background: rgba(16, 185, 129, 0.12);
+
+            border-color: rgba(16, 185, 129, 0.25);
+
+            color: #34d399;
+
+        }
+
+
+
+        .acc-live-return.warn {
+
+            background: rgba(245, 158, 11, 0.12);
+
+            border-color: rgba(245, 158, 11, 0.25);
+
+            color: #fbbf24;
+
+        }
+
+
+
+        .acc-live-return.error {
+
+            background: rgba(239, 68, 68, 0.12);
+
+            border-color: rgba(239, 68, 68, 0.25);
+
+            color: #f87171;
+
+        }
+
+
+
+        .acc-bottom {
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: space-between;
+
+            font-size: 0.78rem;
+
+            color: var(--text-muted);
+
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+
+            padding-top: 6px;
+
+        }
+
+
+
+        .acc-meta {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 10px;
+
+        }
+
+
+
+        .acc-actions {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 4px;
+
+        }
+
+
+
+        .btn-mini {
+
+            padding: 4px 8px;
+
+            border-radius: 6px;
+
+            border: 1px solid var(--border);
+
+            background: rgba(255, 255, 255, 0.04);
+
+            color: var(--text);
+
+            font-size: 0.74rem;
+
+            font-weight: 600;
+
+            cursor: pointer;
+
+            transition: all 0.15s;
+
+        }
+
+
+
+        .btn-mini:hover {
+
+            background: rgba(255, 255, 255, 0.1);
+
+        }
+
+
+
+        .btn-mini.pause-btn {
+
+            border-color: rgba(245, 158, 11, 0.3);
+
+            color: #fbbf24;
+
+            background: rgba(245, 158, 11, 0.06);
+
+        }
+
+
+
+        .btn-mini.pause-btn:hover {
+
+            background: rgba(245, 158, 11, 0.16);
+
+        }
+
+
+
+        .btn-mini.resume-btn {
+
+            border-color: rgba(16, 185, 129, 0.35);
+
+            color: #34d399;
+
+            background: rgba(16, 185, 129, 0.1);
+
+        }
+
+
+
+        .btn-mini.resume-btn:hover {
+
+            background: rgba(16, 185, 129, 0.2);
+
+        }
+
+
+
+        /* Minimalist Summary Strip */
+
+        .summary-strip {
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: space-around;
+
+            padding: 7px 12px;
+
+            background: var(--surface);
+
+            border: 1px solid var(--border);
+
+            border-radius: 12px;
+
+            font-size: 0.75rem;
+
+        }
+
+
+
+        .summary-item {
+
+            display: flex;
+
+            align-items: baseline;
+
+            gap: 6px;
+
+        }
+
+
+
+        .summary-label {
+
+            color: var(--text-muted);
+
+            font-size: 0.72rem;
+
+            letter-spacing: 0.02em;
+
+        }
+
+
+
+        .summary-val {
+
+            font-weight: 700;
+
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+            font-size: 0.85rem;
+
+            color: var(--text);
+
+        }
+
+
+
+        .summary-sep {
+
+            color: rgba(255, 255, 255, 0.12);
+
+        }
+
+
+
+        /* Scan Success Full-screen Flash */
+
+        .scan-success-flash {
+
+            position: fixed;
+
+            inset: 0;
+
+            background: rgba(16, 185, 129, 0.16);
+
+            border: 4px solid #10b981;
+
+            box-shadow: inset 0 0 40px rgba(16, 185, 129, 0.4);
+
+            pointer-events: none;
+
+            z-index: 9999;
+
+            opacity: 1;
+
+            transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+
+        }
+
+
+
+        /* Real-time Streaming Return Logs Console */
+
+        .log-console-container {
+
+            background: #060910;
+
+            border: 1px solid var(--border);
+
+            border-radius: 14px;
+
+            padding: 10px 12px;
+
+            display: flex;
+
+            flex-direction: column;
+
+            gap: 8px;
+
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+
+        }
+
+
+
+        .log-console-header {
+
+            display: flex;
+
+            justify-content: space-between;
+
+            align-items: center;
+
+            font-size: 0.78rem;
+
+            font-weight: 700;
+
+            color: var(--text);
+
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+
+            padding-bottom: 6px;
+
+        }
+
+
+
+        .live-pulse {
+
+            font-size: 0.7rem;
+
+            color: #10b981;
+
+            display: inline-flex;
+
+            align-items: center;
+
+            gap: 5px;
+
+            font-weight: 600;
+
+        }
+
+
+
+        .live-pulse::before {
+
+            content: "";
+
+            width: 6px;
+
+            height: 6px;
+
+            border-radius: 50%;
+
+            background-color: #10b981;
+
+            box-shadow: 0 0 6px #10b981;
+
+            animation: pulse 1.2s infinite;
+
+        }
+
+
+
+        @keyframes pulse {
+
+            0% { opacity: 0.3; }
+
+            50% { opacity: 1; }
+
+            100% { opacity: 0.3; }
+
+        }
+
+
+
+        .log-counter {
+
+            font-size: 0.7rem;
+
+            color: #60a5fa;
+
+            background: rgba(59, 130, 246, 0.1);
+
+            padding: 2px 7px;
+
+            border-radius: 4px;
+
+            font-weight: 600;
+
+        }
+
+
+
+        .logs-console {
+
+            max-height: 180px;
+
+            overflow-y: auto;
+
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+            font-size: 0.73rem;
+
+            line-height: 1.5;
+
+            color: #94a3b8;
+
+            display: flex;
+
+            flex-direction: column;
+
+            gap: 3px;
+
+            scrollbar-width: thin;
+
+        }
+
+
+
+        .log-line {
+
+            display: flex;
+
+            gap: 6px;
+
+            align-items: baseline;
+
+            animation: fadeIn 0.15s ease;
+
+        }
+
+
+
+        .log-time {
+
+            color: #64748b;
+
+            flex-shrink: 0;
+
+            font-size: 0.7rem;
+
+        }
+
+
+
+        .log-text {
+
+            color: #cbd5e1;
+
+            word-break: break-all;
+
+        }
+
+
+
+        .log-text.highlight { color: #fde68a; font-weight: 600; }
+
+        .log-text.ok { color: #6ee7b7; }
+
+        .log-text.err { color: #fca5a5; }
+
+
+
+        /* Modal */
+
+        .modal-backdrop {
+
+            display: none;
+
+            position: fixed;
+
+            top: 0; left: 0; right: 0; bottom: 0;
+
+            background: rgba(0, 0, 0, 0.7);
+
+            backdrop-filter: blur(6px);
+
+            z-index: 100;
+
+            align-items: center;
+
+            justify-content: center;
+
+            padding: 16px;
+
+        }
+
+
+
+        .modal-backdrop.open { display: flex; }
+
+
+
+        .modal-box {
+
+            background: #111827;
+
+            border: 1px solid var(--border);
+
+            border-radius: 16px;
+
+            width: 100%;
+
+            max-width: 400px;
+
+            padding: 18px;
+
+            display: flex;
+
+            flex-direction: column;
+
+            gap: 12px;
+
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+
+            animation: popIn 0.2s ease;
+
+        }
+
+
+
+        .modal-header {
+
+            display: flex;
+
+            justify-content: space-between;
+
+            align-items: center;
+
+        }
+
+
+
+        .modal-title {
+
+            font-size: 1rem;
+
+            font-weight: 700;
+
+            color: #fff;
+
+        }
+
+
+
+        .modal-close {
+
+            background: transparent;
+
+            border: none;
+
+            color: var(--text-muted);
+
+            font-size: 1.1rem;
+
+            font-weight: 700;
+
+            cursor: pointer;
+
+            padding: 2px 6px;
+
+        }
+
+
+
+        .form-field {
+
+            display: flex;
+
+            flex-direction: column;
+
+            gap: 4px;
+
+        }
+
+
+
+        .form-field label {
+
+            font-size: 0.78rem;
+
+            font-weight: 600;
+
+            color: var(--text-muted);
+
+        }
+
+
+
+        .form-field input, .form-field select {
+
+            width: 100%;
+
+            padding: 9px 12px;
+
+            border-radius: 8px;
+
+            border: 1px solid var(--border);
+
+            background: #090d16;
+
+            color: #fff;
+
+            font-size: 0.9rem;
+
+            outline: none;
+
+        }
+
+
+
+        .modal-actions {
+
+            display: flex;
+
+            gap: 8px;
+
+            margin-top: 4px;
+
+        }
+
+
+
+        .btn-secondary {
+
+            flex: 1;
+
+            padding: 9px;
+
+            border-radius: 8px;
+
+            border: 1px solid var(--border);
+
+            background: rgba(255, 255, 255, 0.05);
+
+            color: var(--text);
+
+            font-size: 0.85rem;
+
+            font-weight: 600;
+
+            cursor: pointer;
+
+        }
+
+
+
+        .btn-primary {
+
+            flex: 1;
+
+            padding: 9px;
+
+            border-radius: 8px;
+
+            border: none;
+
+            background: var(--primary);
+
+            color: #fff;
+
+            font-size: 0.85rem;
+
+            font-weight: 600;
+
+            cursor: pointer;
+
+        }
+
+
+
+        .copy-box {
+
+            background: #090d16;
+
+            border: 1px dashed var(--border);
+
+            border-radius: 8px;
+
+            padding: 8px;
+
+            font-size: 0.72rem;
+
+            color: #93c5fd;
+
+            word-break: break-all;
+
+            user-select: all;
+
+        }
+
+
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        @keyframes popIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+
+    </style>
+
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+    <script src="https://unpkg.com/html5-qrcode"></script>
+
+</head>
+
+<body>
+
+
+
+<div class="app-container">
+
+    <!-- Header: Completely Unbranded & Zero Emoji -->
+
+    <header>
+
+        <div class="brand-title">
+
+            <div id="systemPill" class="status-pill">
+
+                <span class="status-dot"></span>
+
+                <span id="systemPillText">連線中</span>
+
+            </div>
+
+            <span id="lastSyncTime" style="font-size:0.75rem; color:var(--text-muted); font-weight:500;"></span>
+
+        </div>
+
+        <div class="header-actions">
+
+            <button class="btn-header" onclick="openProxyModal()">代理連動</button>
+
+            <button class="btn-header" onclick="openAddAccountModal()">+ 帳號</button>
+
+            <button id="btnRefresh" class="btn-header" style="border-color:var(--border); color:var(--text-muted);" onclick="manualRefresh()" title="立即更新">重整</button>
+
+        </div>
+
+    </header>
+
+
+
+    <!-- Global Toast -->
+
+    <div id="toast" class="toast"></div>
+
+
+
+    <section id="activePrompt" class="active-prompt" aria-live="polite" hidden>
+
+        <div id="activePromptTitle" class="active-prompt-title"></div>
+
+        <select id="activePromptSelect" class="target-select" style="max-width:none;" aria-label="選擇待處理點名" onchange="selectActivePrompt(this.value)"></select>
+
+        <div class="quick-row">
+
+            <input id="activePromptInput" class="quick-input" type="text" autocomplete="off" spellcheck="false" oninput="handleActivePromptInput()" onpaste="handleActivePromptPaste()" onkeydown="handleActivePromptKeydown(event)">
+
+            <button id="activePromptSubmit" class="btn-submit" onclick="submitActivePrompt()">送出</button>
+
+            <button id="activePromptCamera" class="btn-icon" onclick="toggleCameraView()" title="掃描 QR">相機</button>
+
+        </div>
+
+        <div id="activePromptHint" class="active-prompt-hint"></div>
+
+        <div id="activePromptFeedback" class="active-prompt-feedback" role="status"></div>
+
+    </section>
+
+
+
+    <!-- Quick Rollcall Action Bar -->
+
+    <div class="quick-bar">
+
+        <div class="quick-row">
+
+            <select id="targetProfileSelect" class="target-select">
+
+                <option value="all">全部</option>
+
+            </select>
+
+            <input type="text" id="quickPayloadInput" class="quick-input" placeholder="密碼 / 條碼" autocomplete="off">
+
+            <button class="btn-submit" onclick="submitQuickPayload()">送出</button>
+
+            <button class="btn-icon" onclick="toggleCameraView()" title="相機">相機</button>
+
+            <label for="qrFileInput" class="btn-icon" title="相片">相片</label>
+
+            <input type="file" id="qrFileInput" accept="image/*" style="display:none;" onchange="handleQrFile(this)">
+
+        </div>
+
+
+
+        <!-- On-Demand Scanner View -->
+
+        <div id="scannerCollapse">
+
+            <div id="reader-wrapper">
+
+                <div id="reader"></div>
+
+                <div class="scanner-reticle">
+
+                    <div class="reticle-corner tl"></div>
+
+                    <div class="reticle-corner tr"></div>
+
+                    <div class="reticle-corner bl"></div>
+
+                    <div class="reticle-corner br"></div>
+
+                    <div class="reticle-laser"></div>
+
+                </div>
+
+                <div id="zoomBadge" class="zoom-badge">1.0x</div>
+
+            </div>
+
+            <div class="scanner-tools">
+
+                <div class="zoom-group">
+
+                    <button class="zoom-btn zoom-level active" onclick="applyZoom(1.0)">1x</button>
+
+                    <button class="zoom-btn zoom-level" onclick="applyZoom(2.0)">2x</button>
+
+                    <button class="zoom-btn zoom-level" onclick="applyZoom(3.0)">3x</button>
+
+                    <button class="zoom-btn zoom-level" onclick="applyZoom(5.0)">5x</button>
+
+                </div>
+
+                <button id="btnSwitchCam" class="zoom-btn" style="display:none;" onclick="switchCamera()" title="切換鏡頭">換鏡頭</button>
+
+                <button id="btnTorch" class="zoom-btn" style="display:none;" onclick="toggleTorch()">補光</button>
+
+                <label class="scan-opt-label" title="掃描辨識成功後是否自動收合相機">
+
+                    <input type="checkbox" id="autoCloseCam" style="accent-color:var(--primary);"> 掃完收合
+
+                </label>
+
+                <button class="zoom-btn" style="color:#f87171;" onclick="toggleCameraView()">關閉</button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+
+    <!-- Hidden Region for Image Processing -->
+
+    <div id="qrTempRegion" style="display:none;"></div>
+
+
+
+    <!-- Minimalist Summary Stats Bar -->
+
+    <div id="summaryStrip" class="summary-strip">
+
+        <div class="summary-item"><span class="summary-label">帳號總數</span><span id="statTotal" class="summary-val">0</span></div>
+
+        <div class="summary-sep">|</div>
+
+        <div class="summary-item"><span class="summary-label">在線監控</span><span id="statActive" class="summary-val" style="color:var(--success);">0</span></div>
+
+        <div class="summary-sep">|</div>
+
+        <div class="summary-item"><span class="summary-label">暫停代簽</span><span id="statPaused" class="summary-val" style="color:var(--text-muted);">0</span></div>
+
+    </div>
+
+
+
+    <!-- Accounts Dashboard Cards -->
+
+    <div id="accountsList" class="accounts-list">
+
+        <div class="account-card">
+
+            <div class="acc-top">
+
+                <div class="acc-user-row">
+
+                    <span class="acc-dot"></span>
+
+                    <span class="acc-name">載入中...</span>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+
+    <!-- Real-time Streaming Return Logs Console -->
+
+    <div class="log-console-container">
+
+        <div class="log-console-header">
+
+            <span>即時回傳紀錄</span>
+
+            <div style="display:flex; align-items:center; gap:8px;">
+
+                <span class="live-pulse">連線接收中</span>
+
+                <span id="logCounter" class="log-counter">0 筆</span>
+
+            </div>
+
+        </div>
+
+        <div id="logsContent" class="logs-console"></div>
+
+    </div>
+
+</div>
+
+
+
+<!-- Modal: Proxy Interceptor Guide -->
+
+<div id="proxyModal" class="modal-backdrop">
+
+    <div class="modal-box" style="max-width:540px;">
+
+        <div class="modal-header">
+
+            <h3 class="modal-title">官方 App 掃碼連動簽到</h3>
+
+            <button class="modal-close" onclick="closeProxyModal()">X</button>
+
+        </div>
+
+        <div style="font-size:0.82rem; line-height:1.6; color:var(--text-muted); margin-bottom:12px;">
+
+            在手機網路代理工具（Shadowrocket / Surge / Loon / Quantumult X）加入轉發腳本。只要你在官方 App 正常掃碼點名，腳本自動攔截點名 Token 並連動後台所有已登入帳號同步完成簽到！
+
+        </div>
+
+        <div class="form-field">
+
+            <label>線上腳本連結 (Script Path)</label>
+
+            <div style="display:flex; gap:8px;">
+
+                <input type="text" id="proxyScriptUrl" readonly style="font-family:monospace; font-size:0.75rem;" value="">
+
+                <button class="btn-secondary" style="padding:4px 10px; font-size:0.75rem;" onclick="copyProxyUrl()">複製連結</button>
+
+            </div>
+
+        </div>
+
+        <div class="form-field">
+
+            <label>Shadowrocket (小火箭) 完整配置</label>
+
+            <div id="srConfigText" class="copy-box" style="font-size:0.72rem; line-height:1.4;">[MITM]
+
+hostname = %APPEND% *tronclass*
+
+
+
+[Script]
+
+RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\/answer.*,requires-body=1,script-path=https://tronclass-bot.onrender.com/proxy.js</div>
+
+            <button class="btn-secondary" style="margin-top:6px; font-size:0.75rem; padding:4px 8px;" onclick="copySrConfig()">複製小火箭規則</button>
+
+        </div>
+
+        <div class="modal-actions">
+
+            <button class="btn-primary" onclick="closeProxyModal()">關閉</button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+
+<!-- Modal: Add Account -->
+
+<div id="addAccountModal" class="modal-backdrop">
+
+    <div class="modal-box">
+
+        <div class="modal-header">
+
+            <h3 class="modal-title">新增帳號</h3>
+
+            <button class="modal-close" onclick="closeAddAccountModal()">X</button>
+
+        </div>
+
+        <div class="form-field">
+
+            <label>學號 / 帳號</label>
+
+            <input type="text" id="newAccUser" placeholder="學號" autocomplete="off">
+
+        </div>
+
+        <div class="form-field">
+
+            <label>密碼</label>
+
+            <input type="password" id="newAccPass" placeholder="密碼" autocomplete="off">
+
+        </div>
+
+        <div class="form-field">
+
+            <label>學校</label>
+
+            <select id="newAccSchool">
+
+                <option value="usc">實踐大學 (usc)</option>
+
+                <option value="thu">東海大學 (thu)</option>
+
+                <option value="tku">淡江大學 (tku)</option>
+
+                <option value="pu">靜宜大學 (pu)</option>
+
+                <option value="fju">輔仁大學 (fju)</option>
+
+                <option value="tronclass">通用雲端 (cloud)</option>
+
+            </select>
+
+        </div>
+
+        <div class="modal-actions">
+
+            <button class="btn-secondary" onclick="closeAddAccountModal()">取消</button>
+
+            <button class="btn-primary" onclick="submitAddAccount()">新增</button>
+
+        </div>
+
+        <div id="addAccResultBox" style="display:none;">
+
+            <div id="newAccJsonDisplay" class="copy-box"></div>
+
+            <button class="btn-secondary" style="margin-top:6px; font-size:0.75rem; padding:6px;" onclick="copyUpdatedJson()">複製 JSON</button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+
+<script>
+
+    const FIXED_MQTT_CHANNEL = "A113280040_secret";
+
+    let mqttClient = null;
+
+    let html5QrcodeScanner = null;
+
+    let isCameraOpen = false;
+
+    let nativeDetector = null;
+
+    let nativeAnimId = null;
+
+    let scanCooldown = false;
+
+    let lastScanText = "";
+
+    const announcedRollcalls = new Set();
+
+    const seenActivePrompts = new Set();
+
+    const confirmedActivePrompts = new Set();
+
+    const normalPageTitle = document.title;
+
+    let activePromptCandidates = [];
+
+    let selectedActivePromptKey = "";
+
+    let activePromptSubmitting = false;
+
+    let currentAccountsData = [];
+
+    let currentZoom = 1.0;
+
+    let minZoom = 1.0;
+
+    let maxZoom = 5.0;
+
+    let isHardwareZoom = false;
+
+    let torchActive = false;
+
+    let liveFeedbackMap = {};
+
+    let logCounter = 0;
+
+    let lastLoggedAges = {};
+
+    let lastProbeCount = 0;
+
+    let lastProbeFetchTime = 0;
+
+
+
+    // Toast
+
+    function showToast(msg, type = "success", duration = 3500) {
+
+        const toast = document.getElementById("toast");
+
+        toast.className = "toast " + type;
+
+        toast.innerText = msg;
+
+        if (duration > 0) {
+
+            setTimeout(() => {
+
+                if (toast.innerText === msg) toast.className = "toast";
+
+            }, duration);
+
+        }
+
+    }
+
+
+
+    // Live Streaming Return Logger
+
+    function addLog(msg, type = "ok") {
+
+        const logs = document.getElementById("logsContent");
+
+        const counterEl = document.getElementById("logCounter");
+
+        if (!logs) return;
+
+
+
+        logCounter++;
+
+        if (counterEl) counterEl.innerText = `${logCounter} 筆`;
+
+
+
+        const line = document.createElement("div");
+
+        line.className = "log-line";
+
+        const time = new Date().toLocaleTimeString();
+
+        line.innerHTML = `<span class="log-time">[${time}]</span><span class="log-text ${type}">${escapeHtml(msg)}</span>`;
+
+        logs.prepend(line);
+
+
+
+        while (logs.children.length > 200) {
+
+            logs.removeChild(logs.lastChild);
+
+        }
+
+    }
+
+
+
+    function escapeHtml(str) {
+
+        return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    }
+
+
+
+    function selectedActivePrompt() {
+
+        return activePromptCandidates.find(item => item.key === selectedActivePromptKey) || null;
+
+    }
+
+
+
+    function selectActivePrompt(key) {
+
+        if (!activePromptCandidates.some(item => item.key === key)) return;
+
+        selectedActivePromptKey = key;
+
+        lastScanText = "";
+
+        document.getElementById("activePromptInput").value = "";
+
+        document.getElementById("activePromptFeedback").innerText = "";
+
+        renderActivePrompt();
+
+        document.getElementById("activePromptInput").focus();
+
+    }
+
+
+
+    function renderActivePrompt() {
+
+        const panel = document.getElementById("activePrompt");
+
+        const prompt = selectedActivePrompt();
+
+        panel.hidden = !prompt;
+
+        document.title = prompt ? `請提供點名資料 · ${normalPageTitle}` : normalPageTitle;
+
+        if (!prompt) return;
+
+        const select = document.getElementById("activePromptSelect");
+
+        const optionKeys = [...select.options].map(option => option.value).join("|");
+
+        const candidateKeys = activePromptCandidates.map(item => item.key).join("|");
+
+        if (optionKeys !== candidateKeys) {
+
+            select.replaceChildren();
+
+            activePromptCandidates.forEach(item => {
+
+                const option = document.createElement("option");
+
+                option.value = item.key;
+
+                option.textContent = `${item.profile} · #${item.rollcallId} · ${item.type === "number" ? "數字" : "QR"}`;
+
+                select.appendChild(option);
+
+            });
+
+        }
+
+        select.value = prompt.key;
+
+        select.hidden = activePromptCandidates.length === 1;
+
+        const number = prompt.type === "number";
+
+        document.getElementById("activePromptTitle").innerText = number ? "請提供老師公布的 4 位數字碼" : "請提供目前的 QR Code";
+
+        const input = document.getElementById("activePromptInput");
+
+        input.placeholder = number ? "輸入 4 位數字後立即送出" : "貼上 QR 內容後立即送出";
+
+        input.inputMode = number ? "numeric" : "text";
+
+        input.maxLength = number ? 4 : 8192;
+
+        input.disabled = activePromptSubmitting;
+
+        document.getElementById("activePromptSubmit").disabled = activePromptSubmitting;
+
+        document.getElementById("activePromptCamera").hidden = number;
+
+        document.getElementById("activePromptHint").innerText = `${prompt.profile} · 點名 #${prompt.rollcallId}。送出後會確認你的個人簽到狀態。`;
+
+    }
+
+
+
+    function updateActivePrompt(accounts) {
+
+        if (activePromptSubmitting) return;
+
+        const candidates = accounts.flatMap(account => {
+
+            const check = account.last_check || {};
+
+            const type = check.status === "is_number" ? "number" : check.status === "unsupported_qrcode" ? "qrcode" : "";
+
+            const rollcallId = String(check.rollcall_id || "");
+
+            const age = check.age_seconds;
+
+            if (!type || !/^[0-9]+$/.test(rollcallId) || account.paused || account.heartbeat_stale
+
+                    || account.monitor_state !== "running" || typeof age !== "number" || !Number.isFinite(age) || age > 12) return [];
+
+            const key = `${account.name}:${type}:${rollcallId}`;
+
+            return confirmedActivePrompts.has(key) ? [] : [{key, profile: account.name, type, rollcallId}];
+
+        });
+
+        const firstNew = candidates.find(item => !seenActivePrompts.has(item.key));
+
+        candidates.forEach(item => seenActivePrompts.add(item.key));
+
+        activePromptCandidates = candidates;
+
+        const previousKey = selectedActivePromptKey;
+
+        if (firstNew) selectedActivePromptKey = firstNew.key;
+
+        else if (!candidates.some(item => item.key === selectedActivePromptKey)) selectedActivePromptKey = candidates[0]?.key || "";
+
+        renderActivePrompt();
+
+        if (selectedActivePromptKey !== previousKey) {
+
+            document.getElementById("activePromptInput").value = "";
+
+            document.getElementById("activePromptFeedback").innerText = "";
+
+        }
+
+        if (firstNew) {
+
+            showToast(`${firstNew.profile}：請提供${firstNew.type === "number" ? "數字碼" : "QR Code"}`, "loading", 6000);
+
+            if (!document.hidden) document.getElementById("activePromptInput").focus();
+
+        }
+
+    }
+
+
+
+    function handleActivePromptInput() {
+
+        const prompt = selectedActivePrompt();
+
+        if (prompt?.type === "number" && /^[0-9]{4}$/.test(document.getElementById("activePromptInput").value)) {
+
+            submitActivePrompt();
+
+        }
+
+    }
+
+
+
+    function handleActivePromptPaste() {
+
+        if (selectedActivePrompt()?.type === "qrcode") {
+
+            setTimeout(() => submitActivePrompt(), 0);
+
+        }
+
+    }
+
+
+
+    function handleActivePromptKeydown(event) {
+
+        if (event.key === "Enter") {
+
+            event.preventDefault();
+
+            submitActivePrompt();
+
+        }
+
+    }
+
+
+
+    async function submitActivePrompt(payloadOverride = null) {
+
+        const prompt = selectedActivePrompt();
+
+        if (!prompt || activePromptSubmitting) return;
+
+        const input = document.getElementById("activePromptInput");
+
+        const payload = String(payloadOverride ?? input.value).trim();
+
+        const feedback = document.getElementById("activePromptFeedback");
+
+        if (prompt.type === "number" && !/^[0-9]{4}$/.test(payload)) {
+
+            feedback.innerText = "請輸入老師提供的 4 位數字碼。";
+
+            return;
+
+        }
+
+        if (!payload) {
+
+            feedback.innerText = "請貼上目前的 QR 內容或使用相機掃描。";
+
+            return;
+
+        }
+
+        activePromptSubmitting = true;
+
+        renderActivePrompt();
+
+        feedback.innerText = "送出中，正在確認個人狀態…";
+
+        try {
+
+            const response = await fetch("/api/submit", {
+
+                method: "POST",
+
+                headers: {"Content-Type": "application/json"},
+
+                body: JSON.stringify({
+
+                    profile: prompt.profile,
+
+                    payload,
+
+                    expectedType: prompt.type,
+
+                    expectedRollcallId: prompt.rollcallId
+
+                })
+
+            });
+
+            const result = await response.json();
+
+            const detail = (result.details || []).find(item => item.profile === prompt.profile)?.result || {};
+
+            const message = detail.reply || result.message || "未能確認簽到結果。";
+
+            input.value = "";
+
+            feedback.innerText = message;
+
+            liveFeedbackMap[prompt.profile] = {
+
+                text: message, state: detail.ok ? "success" : "warn", time: new Date().toLocaleTimeString()
+
+            };
+
+            addLog(`${prompt.profile} 點名 #${prompt.rollcallId}：${message}`, detail.ok ? "ok" : "err");
+
+            showToast(message, detail.ok ? "success" : "error", 5000);
+
+            if (detail.ok) confirmedActivePrompts.add(prompt.key);
+
+        } catch (_error) {
+
+            input.value = "";
+
+            feedback.innerText = "連線中斷，結果未明；請先查看官方點名紀錄。";
+
+            showToast(feedback.innerText, "error", 5000);
+
+        } finally {
+
+            activePromptSubmitting = false;
+
+            await fetchStatus(true);
+
+            updateActivePrompt(currentAccountsData);
+
+        }
+
+    }
+
+
+
+    // Status Polling with Streaming Return Logs
+
+    let statusRequestInFlight = false;
+
+    async function fetchStatus(isManual = false) {
+
+        if (statusRequestInFlight) return;
+
+        statusRequestInFlight = true;
+
+        try {
+
+            const resp = await fetch("/api/status", { cache: "no-store" });
+
+            if (!resp.ok) throw new Error("HTTP " + resp.status);
+
+            const data = await resp.json();
+
+            if (data.status === "error") {
+
+                showToast("配置警告: " + (data.error || "未知錯誤"), "warn", 5000);
+
+                addLog("系統配置警告: " + (data.error || "未知錯誤"), "err");
+
+            }
+
+            currentAccountsData = data.accounts || [];
+
+            renderDashboard(currentAccountsData);
+
+            updateActivePrompt(currentAccountsData);
+
+
+
+            const totalCount = currentAccountsData.length;
+
+            const pausedCount = currentAccountsData.filter(a => a.paused).length;
+
+            const activeMonitoring = currentAccountsData.filter(a => !a.paused).length;
+
+            const activeRollcalls = currentAccountsData.filter(a => !a.paused && rollcallStatus(a).tone === "active").length;
+
+
+
+            const elTotal = document.getElementById("statTotal");
+
+            const elActive = document.getElementById("statActive");
+
+            const elPaused = document.getElementById("statPaused");
+
+            if (elTotal) elTotal.innerText = String(totalCount);
+
+            if (elActive) elActive.innerText = String(activeMonitoring);
+
+            if (elPaused) elPaused.innerText = String(pausedCount);
+
+
+
+            const pill = document.getElementById("systemPill");
+
+            pill.className = "status-pill";
+
+            document.getElementById("systemPillText").innerText = activeRollcalls > 0
+
+                ? `${activeRollcalls} 點名中`
+
+                : `${activeMonitoring} 監控中`;
+
+
+
+            const nowStr = new Date().toLocaleTimeString();
+
+            document.getElementById("lastSyncTime").innerText = nowStr;
+
+
+
+            // Stream continuous live returns into logger
+
+            streamAccountReturns(currentAccountsData);
+
+            const nowMs = Date.now();
+
+            if (nowMs - lastProbeFetchTime > 30000) {
+
+                lastProbeFetchTime = nowMs;
+
+                await fetchProbeReturns();
+
+            }
+
+        } catch (err) {
+
+            const pill = document.getElementById("systemPill");
+
+            pill.className = "status-pill offline";
+
+            document.getElementById("systemPillText").innerText = "離線";
+
+            addLog("連線中斷，正在自動重試...", "err");
+
+        } finally {
+
+            statusRequestInFlight = false;
+
+        }
+
+    }
+
+
+
+    function streamAccountReturns(accounts) {
+
+        if (!accounts || accounts.length === 0) return;
+
+        accounts.forEach(acc => {
+
+            const st = rollcallStatus(acc);
+
+            const isCookieOk = acc.cookie_valid;
+
+            const age = st.age === null ? 0 : st.age;
+
+            const prevAge = lastLoggedAges[acc.name];
+
+
+
+            if (prevAge === undefined || Math.abs(age - prevAge) >= 3 || st.tone === "active") {
+
+                lastLoggedAges[acc.name] = age;
+
+                const statusDesc = `${acc.name}: ${st.label} (Cookie ${isCookieOk ? '正常' : '需登入'}, 巡檢 ${age}s前)`;
+
+                const logType = st.tone === "active" ? "highlight" : (isCookieOk ? "ok" : "err");
+
+                addLog(statusDesc, logType);
+
+            }
+
+        });
+
+    }
+
+
+
+    async function fetchProbeReturns() {
+
+        try {
+
+            const resp = await fetch("/api/probe_log", { cache: "no-store" });
+
+            if (!resp.ok) return;
+
+            const data = await resp.json();
+
+            const entries = data.entries || [];
+
+            if (entries.length > lastProbeCount) {
+
+                const newEntries = entries.slice(lastProbeCount);
+
+                lastProbeCount = entries.length;
+
+                newEntries.forEach(e => {
+
+                    const lat = e.latency_ms ? `${e.latency_ms}ms` : '';
+
+                    addLog(`雲端保活巡檢: 正常 (${lat})`, "ok");
+
+                });
+
+            }
+
+        } catch (e) {}
+
+    }
+
+
+
+    // Manual Refresh with Immediate Feedback
+
+    async function manualRefresh() {
+
+        const btn = document.getElementById("btnRefresh");
+
+        if (btn) btn.classList.add("spin");
+
+        showToast("正在更新...", "loading", 1000);
+
+        addLog("手動請求即時刷新全體狀態", "ok");
+
+        await fetchStatus(true);
+
+        setTimeout(() => {
+
+            if (btn) btn.classList.remove("spin");
+
+            showToast("已更新最新狀態", "success", 1500);
+
+        }, 300);
+
+    }
+
+
+
+    function rollcallStatus(account) {
+
+        if (account.paused) {
+
+            return { label: "已暫停", tone: "paused", age: null };
+
+        }
+
+        const checked = account.last_check || {};
+
+        const age = typeof checked.age_seconds === "number" ? Math.max(0, Math.round(checked.age_seconds)) : null;
+
+        const states = {
+
+            is_number: ["正在數字點名", "active"],
+
+            is_radar: ["正在雷達點名", "active"],
+
+            unsupported_radar: ["雷達點名", "active"],
+
+            unsupported_qrcode: ["QR 等待簽到", "active"],
+
+            on_call_fine: ["已簽到", "confirmed"],
+
+            not_call: ["無點名", ""],
+
+            not_start: ["未開始", ""],
+
+            idle: ["監控中", ""],
+
+            error: ["檢查失敗", "warn"]
+
+        };
+
+        const state = states[checked.status] || [checked.status || "監控中", ""];
+
+        return { label: state[0], tone: state[1], age };
+
+    }
+
+
+
+    // Render Dashboard Cards
+
+    function renderDashboard(accounts) {
+
+        const container = document.getElementById("accountsList");
+
+        const select = document.getElementById("targetProfileSelect");
+
+        if (!accounts || accounts.length === 0) return;
+
+
+
+        const currentSelected = select.value;
+
+        select.innerHTML = '<option value="all">全部</option>';
+
+
+
+        let html = "";
+
+        accounts.forEach(acc => {
+
+            const isPaused = Boolean(acc.paused);
+
+            const opt = document.createElement("option");
+
+            opt.value = acc.name;
+
+            opt.innerText = isPaused ? `${acc.name} (已暫停)` : acc.name;
+
+            select.appendChild(opt);
+
+
+
+            const st = rollcallStatus(acc);
+
+            const rollcallId = acc.last_check?.rollcall_id;
+
+            if (!isPaused && st.tone === "active" && rollcallId) {
+
+                const key = `${acc.name}:${rollcallId}`;
+
+                if (!announcedRollcalls.has(key)) {
+
+                    announcedRollcalls.add(key);
+
+                    showToast(`${acc.name}：${st.label}`, "loading", 6000);
+
+                    addLog(`${acc.name}：${st.label}`, "highlight");
+
+                    if (navigator.vibrate) navigator.vibrate(150);
+
+                }
+
+            }
+
+
+
+            const isRunning = acc.monitor_state === "running" && !acc.heartbeat_stale;
+
+            const isCookieOk = acc.cookie_valid;
+
+
+
+            let dotClass = "acc-dot";
+
+            if (isPaused) dotClass += " paused";
+
+            else if (st.tone === "active") dotClass += " active";
+
+            else if (!isCookieOk) dotClass += " bad";
+
+            else if (!isRunning) dotClass += " warn";
+
+
+
+            let cardClass = "account-card";
+
+            if (isPaused) cardClass += " paused";
+
+            else if (st.tone === "active") cardClass += " active";
+
+            else if (st.tone === "confirmed") cardClass += " confirmed";
+
+
+
+            let badgeClass = "acc-badge";
+
+            if (isPaused) badgeClass += " paused";
+
+            else if (st.tone === "active") badgeClass += " active";
+
+            else if (st.tone === "confirmed") badgeClass += " confirmed";
+
+
+
+            const liveMsg = liveFeedbackMap[acc.name];
+
+            let liveReturnHtml = "";
+
+            if (liveMsg) {
+
+                liveReturnHtml = `<div class="acc-live-return ${liveMsg.state}">${escapeHtml(liveMsg.text)} ${liveMsg.time ? `<span style="opacity:0.65; font-size:0.7rem;">(${liveMsg.time})</span>` : ''}</div>`;
+
+            }
+
+
+
+            const togglePauseBtn = isPaused
+
+                ? `<button class="btn-mini resume-btn" onclick="togglePauseAccount('${escapeHtml(acc.name)}')">啟用</button>`
+
+                : `<button class="btn-mini pause-btn" onclick="togglePauseAccount('${escapeHtml(acc.name)}')">暫停</button>`;
+
+
+
+            html += `
+
+                <div class="${cardClass}">
+
+                    <div class="acc-top">
+
+                        <div class="acc-user-row">
+
+                            <span class="${dotClass}"></span>
+
+                            <span class="acc-name">${escapeHtml(acc.name)}</span>
+
+                        </div>
+
+                        <span class="${badgeClass}">${st.label}</span>
+
+                    </div>
+
+                    ${liveReturnHtml}
+
+                    <div class="acc-bottom">
+
+                        <div class="acc-meta">
+
+                            <span>Cookie: ${isCookieOk ? '正常' : '需登入'}</span>
+
+                            <span>${isPaused ? '已暫停' : (st.age === null ? '-' : `${st.age}s`)}</span>
+
+                        </div>
+
+                        <div class="acc-actions">
+
+                            <button id="btnCheck-${escapeHtml(acc.name)}" class="btn-mini" onclick="forceCheck('${escapeHtml(acc.name)}')">檢查</button>
+
+                            <button id="btnReauth-${escapeHtml(acc.name)}" class="btn-mini" onclick="reauth('${escapeHtml(acc.name)}')">登入</button>
+
+                            ${togglePauseBtn}
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            `;
+
+        });
+
+
+
+        container.innerHTML = html;
+
+        if (currentSelected) select.value = currentSelected;
+
+    }
+
+
+
+    // Quick Submit
+
+    async function submitQuickPayload() {
+
+        const input = document.getElementById("quickPayloadInput");
+
+        const payload = input.value.trim();
+
+        const profile = document.getElementById("targetProfileSelect").value;
+
+
+
+        if (!payload) {
+
+            showToast("請輸入密碼或條碼", "error", 2500);
+
+            input.focus();
+
+            return;
+
+        }
+
+
+
+        showToast("送出中...", "loading", 0);
+
+        addLog(`送出點名資料 (目標: ${profile})`, "ok");
+
+
+
+        try {
+
+            const resp = await fetch("/api/submit", {
+
+                method: "POST",
+
+                headers: { "Content-Type": "application/json" },
+
+                body: JSON.stringify({ payload, profile })
+
+            });
+
+            const res = await resp.json();
+
+            const allConfirmed = (res.details || []).length > 0 && res.details.every(i => i.result?.ok);
+
+
+
+            if (res.details && res.details.length > 0) {
+
+                res.details.forEach(item => {
+
+                    const r = item.result || {};
+
+                    const msg = r.reply || r.status || (r.ok ? "簽到成功" : "失敗");
+
+                    liveFeedbackMap[item.profile] = {
+
+                        text: msg,
+
+                        state: r.ok ? "success" : "warn",
+
+                        time: new Date().toLocaleTimeString()
+
+                    };
+
+                    addLog(`${item.profile} 簽到回傳: ${msg}`, r.ok ? "ok" : "err");
+
+                });
+
+            }
+
+
+
+            if (res.ok && allConfirmed) {
+
+                showToast(res.message || "簽到成功", "success");
+
+                input.value = "";
+
+            } else if (res.ok) {
+
+                showToast(res.message || "已送出，等待確認", "loading");
+
+            } else {
+
+                showToast(res.message || "簽到失敗", "error");
+
+            }
+
+        } catch (e) {
+
+            try {
+
+                await broadcastMqtt(payload);
+
+                showToast("已送出中繼", "loading");
+
+                addLog(`條碼已送至中繼頻道`, "ok");
+
+                input.value = "";
+
+            } catch (err) {
+
+                showToast("連線失敗", "error");
+
+                addLog("送出連線失敗", "err");
+
+            }
+
+        }
+
+        await fetchStatus(true);
+
+    }
+
+
+
+    // Force Check
+
+    async function forceCheck(profile) {
+
+        const btn = document.getElementById(`btnCheck-${profile}`);
+
+        if (btn) { btn.innerText = "..."; btn.classList.add("spin"); }
+
+        liveFeedbackMap[profile] = { text: "檢查中...", state: "loading" };
+
+        renderDashboard(currentAccountsData);
+
+        showToast(`檢查中 (${profile})...`, "loading", 2000);
+
+        addLog(`發起手動強制檢查: ${profile}`, "ok");
+
+
+
+        try {
+
+            const resp = await fetch("/api/force_check", {
+
+                method: "POST",
+
+                headers: { "Content-Type": "application/json" },
+
+                body: JSON.stringify({ profile })
+
+            });
+
+            const res = await resp.json();
+
+            const detail = (res.details || []).find(d => d.profile === profile) || {};
+
+            const replyMsg = detail.result?.reply || detail.result?.status || res.message || "檢查完成";
+
+
+
+            liveFeedbackMap[profile] = {
+
+                text: replyMsg,
+
+                state: detail.result?.ok ? "success" : "warn",
+
+                time: new Date().toLocaleTimeString()
+
+            };
+
+            showToast(`${profile}：${replyMsg}`, detail.result?.ok ? "success" : "loading", 3500);
+
+            addLog(`${profile} 檢查回傳: ${replyMsg}`, detail.result?.ok ? "ok" : "warn");
+
+        } catch (e) {
+
+            liveFeedbackMap[profile] = { text: "檢查連線失敗", state: "error", time: new Date().toLocaleTimeString() };
+
+            showToast("檢查失敗", "error");
+
+            addLog(`${profile} 檢查連線失敗`, "err");
+
+        }
+
+        await fetchStatus(true);
+
+    }
+
+
+
+    // Reauth
+
+    async function reauth(profile) {
+
+        const btn = document.getElementById(`btnReauth-${profile}`);
+
+        if (btn) { btn.innerText = "..."; btn.classList.add("spin"); }
+
+        liveFeedbackMap[profile] = { text: "正在登入...", state: "loading" };
+
+        renderDashboard(currentAccountsData);
+
+        showToast(`登入中 (${profile})...`, "loading", 3000);
+
+        addLog(`發起重新登入: ${profile}`, "ok");
+
+
+
+        try {
+
+            const resp = await fetch("/api/reauth", {
+
+                method: "POST",
+
+                headers: { "Content-Type": "application/json" },
+
+                body: JSON.stringify({ profile })
+
+            });
+
+            const res = await resp.json();
+
+            const detail = (res.details || []).find(d => d.profile === profile) || {};
+
+            const replyMsg = detail.result?.reply || detail.result?.status || res.message || "登入完成";
+
+
+
+            liveFeedbackMap[profile] = {
+
+                text: replyMsg,
+
+                state: res.ok ? "success" : "error",
+
+                time: new Date().toLocaleTimeString()
+
+            };
+
+            showToast(replyMsg, res.ok ? "success" : "error", 3000);
+
+            addLog(`${profile} 登入回傳: ${replyMsg}`, res.ok ? "ok" : "err");
+
+        } catch (e) {
+
+            liveFeedbackMap[profile] = { text: "登入請求失敗", state: "error", time: new Date().toLocaleTimeString() };
+
+            showToast("登入失敗", "error");
+
+            addLog(`${profile} 登入連線失敗`, "err");
+
+        }
+
+        await fetchStatus(true);
+
+    }
+
+
+
+    async function togglePauseAccount(name) {
+
+        const acc = currentAccountsData.find(a => a.name === name);
+
+        const willPause = acc ? !acc.paused : true;
+
+        showToast(willPause ? `正在暫停帳號 ${name}...` : `正在啟用帳號 ${name}...`, "loading", 1000);
+
+        addLog(`請求${willPause ? "暫停" : "啟用"}帳號: ${name}`, "ok");
+
+        try {
+
+            const resp = await fetch("/api/account/toggle_pause", {
+
+                method: "POST",
+
+                headers: { "Content-Type": "application/json" },
+
+                body: JSON.stringify({ name, paused: willPause })
+
+            });
+
+            const res = await resp.json();
+
+            if (res.ok) {
+
+                showToast(res.message || (res.paused ? `帳號 ${name} 已暫停` : `帳號 ${name} 已啟用`), "success", 2500);
+
+                addLog(`帳號 ${name} 狀態已更新: ${res.paused ? "已暫停" : "已啟用"}`, res.paused ? "warn" : "ok");
+
+                await fetchStatus(true);
+
+            } else {
+
+                showToast(res.message || "操作失敗", "error");
+
+                addLog(`帳號狀態切換失敗: ${res.message || "未知原因"}`, "err");
+
+            }
+
+        } catch (e) {
+
+            showToast("連線失敗", "error");
+
+            addLog(`連線失敗: 無法更新帳號 ${name} 狀態`, "err");
+
+        }
+
+    }
+
+
+
+    // Proxy Relay Modal
+
+    function openProxyModal() {
+
+        const url = window.location.origin + "/proxy.js";
+
+        const input = document.getElementById("proxyScriptUrl");
+
+        if (input) input.value = url;
+
+        const srBox = document.getElementById("srConfigText");
+
+        if (srBox) {
+
+            srBox.innerText = `[MITM]\nhostname = %APPEND% *tronclass*\n\n[Script]\nRollcallRelay = type=http-request,pattern=^https?:\\/\\/.*\\/api\\/rollcall\\/[0-9]+\\/answer.*,requires-body=1,script-path=${url}`;
+
+        }
+
+        document.getElementById("proxyModal").classList.add("open");
+
+    }
+
+
+
+    function closeProxyModal() {
+
+        document.getElementById("proxyModal").classList.remove("open");
+
+    }
+
+
+
+    function copyProxyUrl() {
+
+        const input = document.getElementById("proxyScriptUrl");
+
+        if (input && input.value) {
+
+            navigator.clipboard.writeText(input.value).then(() => {
+
+                showToast("已複製腳本連結", "success");
+
+            }).catch(() => {});
+
+        }
+
+    }
+
+
+
+    function copySrConfig() {
+
+        const srBox = document.getElementById("srConfigText");
+
+        if (srBox && srBox.innerText) {
+
+            navigator.clipboard.writeText(srBox.innerText).then(() => {
+
+                showToast("已複製小火箭規則", "success");
+
+            }).catch(() => {});
+
+        }
+
+    }
+
+
+
+    // Modal
+
+    function openAddAccountModal() {
+
+        document.getElementById("newAccUser").value = "";
+
+        document.getElementById("newAccPass").value = "";
+
+        document.getElementById("addAccResultBox").style.display = "none";
+
+        document.getElementById("addAccountModal").classList.add("open");
+
+        document.getElementById("newAccUser").focus();
+
+    }
+
+
+
+    function closeAddAccountModal() {
+
+        document.getElementById("addAccountModal").classList.remove("open");
+
+    }
+
+
+
+    let lastUpdatedJson = "";
+
+    async function submitAddAccount() {
+
+        const user = document.getElementById("newAccUser").value.trim();
+
+        const passwd = document.getElementById("newAccPass").value.trim();
+
+        const school = document.getElementById("newAccSchool").value.trim();
+
+        if (!user || !passwd) {
+
+            showToast("請輸入帳號密碼", "error");
+
+            return;
+
+        }
+
+
+
+        showToast("新增中...", "loading", 0);
+
+        try {
+
+            const resp = await fetch("/api/account/add", {
+
+                method: "POST",
+
+                headers: { "Content-Type": "application/json" },
+
+                body: JSON.stringify({ user, passwd, school, name: user })
+
+            });
+
+            const res = await resp.json();
+
+            if (res.ok) {
+
+                showToast(res.message, "success");
+
+                addLog(`新增帳號成功: ${user}`, "ok");
+
+                lastUpdatedJson = res.accounts_json;
+
+                document.getElementById("newAccJsonDisplay").innerText = res.accounts_json;
+
+                document.getElementById("addAccResultBox").style.display = "block";
+
+                await fetchStatus(true);
+
+            } else {
+
+                showToast(res.message || "新增失敗", "error");
+
+            }
+
+        } catch (e) {
+
+            showToast("連線失敗", "error");
+
+        }
+
+    }
+
+
+
+    function copyUpdatedJson() {
+
+        if (!lastUpdatedJson) return;
+
+        navigator.clipboard.writeText(lastUpdatedJson).then(() => {
+
+            showToast("已複製 JSON", "success");
+
+        });
+
+    }
+
+
+
+    // Camera & Enhanced Scanner Controls
+
+    let availableCameras = [];
+
+    let currentCameraIndex = 0;
+
+    let selectedCameraDeviceId = null;
+
+
+
+    function playScanBeep() {
+
+        try {
+
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+
+            if (!AudioContext) return;
+
+            const ctx = new AudioContext();
+
+            const osc = ctx.createOscillator();
+
+            const gain = ctx.createGain();
+
+            osc.type = "sine";
+
+            osc.frequency.setValueAtTime(1046.5, ctx.currentTime);
+
+            gain.gain.setValueAtTime(0.25, ctx.currentTime);
+
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+
+            osc.connect(gain);
+
+            gain.connect(ctx.destination);
+
+            osc.start();
+
+            osc.stop(ctx.currentTime + 0.12);
+
+        } catch (e) {}
+
+    }
+
+
+
+    function getActiveVideoTrack() {
+
+        const video = document.querySelector("#reader video");
+
+        return video?.srcObject?.getVideoTracks?.()[0] || null;
+
+    }
+
+
+
+    async function toggleCameraView() {
+
+        const box = document.getElementById("scannerCollapse");
+
+        if (isCameraOpen) {
+
+            stopCameraScanner();
+
+            box.style.display = "none";
+
+            isCameraOpen = false;
+
+        } else {
+
+            box.style.display = "flex";
+
+            isCameraOpen = true;
+
+            await startCameraScanner(selectedCameraDeviceId);
+
+        }
+
+    }
+
+
+
+    async function initNativeBarcodeDetector() {
+
+        if (typeof window !== "undefined" && "BarcodeDetector" in window) {
+
+            try {
+
+                const formats = await BarcodeDetector.getSupportedFormats();
+
+                if (formats.includes("qr_code")) {
+
+                    nativeDetector = new BarcodeDetector({ formats: ["qr_code"] });
+
+                }
+
+            } catch (e) {}
+
+        }
+
+    }
+
+
+
+    async function runNativeVideoLoop() {
+
+        if (!isCameraOpen || !nativeDetector) return;
+
+        const video = document.querySelector("#reader video");
+
+        if (video && video.readyState >= 2 && !video.paused && !video.ended) {
+
+            try {
+
+                const codes = await nativeDetector.detect(video);
+
+                if (codes && codes.length > 0 && codes[0].rawValue) {
+
+                    onScanSuccess(codes[0].rawValue);
+
+                }
+
+            } catch (e) {}
+
+        }
+
+        if (isCameraOpen) {
+
+            nativeAnimId = requestAnimationFrame(runNativeVideoLoop);
+
+        }
+
+    }
+
+
+
+    async function startCameraScanner(deviceId = null) {
+
+        if (html5QrcodeScanner) {
+
+            try { await html5QrcodeScanner.stop(); } catch (e) {}
+
+        }
+
+        html5QrcodeScanner = new Html5Qrcode("reader", {
+
+            experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+
+            verbose: false
+
+        });
+
+
+
+        const config = {
+
+            fps: 15,
+
+            qrbox: function(w, h) {
+
+                const size = Math.floor(Math.min(w, h) * 0.88);
+
+                return { width: size, height: size };
+
+            },
+
+            aspectRatio: 1.0,
+
+            videoConstraints: deviceId
+
+                ? { deviceId: { exact: deviceId }, focusMode: "continuous" }
+
+                : {
+
+                    facingMode: "environment",
+
+                    width: { ideal: 1280, max: 1920 },
+
+                    height: { ideal: 720, max: 1080 },
+
+                    focusMode: "continuous"
+
+                }
+
+        };
+
+
+
+        const onReady = () => {
+
+            setupZoomAndControls();
+
+            setupPinchToZoom();
+
+            loadAvailableCameras();
+
+            if (nativeDetector) runNativeVideoLoop();
+
+        };
+
+
+
+        const cameraMode = deviceId ? { deviceId: { exact: deviceId } } : { facingMode: "environment" };
+
+
+
+        html5QrcodeScanner.start(
+
+            cameraMode,
+
+            config,
+
+            onScanSuccess,
+
+            () => {}
+
+        ).then(onReady).catch(() => {
+
+            html5QrcodeScanner.start(
+
+                cameraMode,
+
+                { fps: 12 },
+
+                onScanSuccess,
+
+                () => {}
+
+            ).then(onReady).catch(() => {
+
+                showToast("無法開啟相機，請確認瀏覽器相機權限", "error");
+
+                toggleCameraView();
+
+            });
+
+        });
+
+    }
+
+
+
+    function stopCameraScanner() {
+
+        if (nativeAnimId) {
+
+            cancelAnimationFrame(nativeAnimId);
+
+            nativeAnimId = null;
+
+        }
+
+        if (html5QrcodeScanner) {
+
+            html5QrcodeScanner.stop().then(() => {
+
+                html5QrcodeScanner.clear();
+
+                html5QrcodeScanner = null;
+
+            }).catch(() => {});
+
+        }
+
+    }
+
+
+
+    async function loadAvailableCameras() {
+
+        if (typeof Html5Qrcode !== "undefined" && Html5Qrcode.getCameras) {
+
+            try {
+
+                const cams = await Html5Qrcode.getCameras();
+
+                if (cams && cams.length > 0) {
+
+                    availableCameras = cams;
+
+                    const btn = document.getElementById("btnSwitchCam");
+
+                    if (btn) btn.style.display = cams.length > 1 ? "inline-flex" : "none";
+
+                }
+
+            } catch (e) {}
+
+        }
+
+    }
+
+
+
+    async function switchCamera() {
+
+        if (!isCameraOpen || availableCameras.length <= 1) return;
+
+        currentCameraIndex = (currentCameraIndex + 1) % availableCameras.length;
+
+        const nextCam = availableCameras[currentCameraIndex];
+
+        selectedCameraDeviceId = nextCam.id;
+
+        showToast(`切換鏡頭: ${nextCam.label || ('相機 ' + (currentCameraIndex + 1))}`, "loading", 1500);
+
+        await startCameraScanner(selectedCameraDeviceId);
+
+    }
+
+
+
+    function setupZoomAndControls() {
+
+        const track = getActiveVideoTrack();
+
+        let caps = {};
+
+        if (track && typeof track.getCapabilities === "function") {
+
+            try { caps = track.getCapabilities() || {}; } catch (e) {}
+
+        }
+
+        if (caps.zoom) {
+
+            isHardwareZoom = true;
+
+            minZoom = caps.zoom.min || 1.0;
+
+            maxZoom = Math.min(8.0, caps.zoom.max || 5.0);
+
+        } else {
+
+            isHardwareZoom = false;
+
+            minZoom = 1.0;
+
+            maxZoom = 4.0;
+
+        }
+
+        const btnTorch = document.getElementById("btnTorch");
+
+        if (caps.torch) {
+
+            btnTorch.style.display = "inline-flex";
+
+            torchActive = false;
+
+        } else {
+
+            btnTorch.style.display = "none";
+
+        }
+
+        applyZoom(1.0);
+
+    }
+
+
+
+    async function applyZoom(val) {
+
+        currentZoom = Math.min(maxZoom, Math.max(minZoom, parseFloat(val)));
+
+        document.querySelectorAll(".zoom-btn.zoom-level").forEach(b => {
+
+            const v = parseFloat(b.innerText);
+
+            b.classList.toggle("active", Math.abs(v - currentZoom) < 0.25);
+
+        });
+
+        const badge = document.getElementById("zoomBadge");
+
+        if (badge) badge.innerText = `${currentZoom.toFixed(1)}x`;
+
+
+
+        const track = getActiveVideoTrack();
+
+        if (isHardwareZoom && track) {
+
+            try {
+
+                await track.applyConstraints({ advanced: [{ zoom: currentZoom }] });
+
+                return;
+
+            } catch (e) {}
+
+        }
+
+        const video = document.querySelector("#reader video");
+
+        if (video) video.style.transform = currentZoom > 1.0 ? `scale(${currentZoom})` : "none";
+
+    }
+
+
+
+    function setupPinchToZoom() {
+
+        const wrapper = document.getElementById("reader-wrapper");
+
+        if (!wrapper || wrapper.dataset.pinchSetup) return;
+
+        wrapper.dataset.pinchSetup = "1";
+
+
+
+        let startDist = 0;
+
+        let startZoom = 1.0;
+
+
+
+        wrapper.addEventListener("touchstart", (e) => {
+
+            if (e.touches.length === 2) {
+
+                startDist = Math.hypot(
+
+                    e.touches[0].clientX - e.touches[1].clientX,
+
+                    e.touches[0].clientY - e.touches[1].clientY
+
+                );
+
+                startZoom = currentZoom;
+
+            }
+
+        }, { passive: true });
+
+
+
+        wrapper.addEventListener("touchmove", (e) => {
+
+            if (e.touches.length === 2 && startDist > 0) {
+
+                const dist = Math.hypot(
+
+                    e.touches[0].clientX - e.touches[1].clientX,
+
+                    e.touches[0].clientY - e.touches[1].clientY
+
+                );
+
+                const scale = dist / startDist;
+
+                applyZoom(startZoom * scale);
+
+            }
+
+        }, { passive: true });
+
+
+
+        wrapper.addEventListener("touchend", () => {
+
+            startDist = 0;
+
+        }, { passive: true });
+
+    }
+
+
+
+    async function toggleTorch() {
+
+        const track = getActiveVideoTrack();
+
+        if (!track) return;
+
+        torchActive = !torchActive;
+
+        try {
+
+            await track.applyConstraints({ advanced: [{ torch: torchActive }] });
+
+            document.getElementById("btnTorch").classList.toggle("active", torchActive);
+
+        } catch (e) {
+
+            torchActive = !torchActive;
+
+        }
+
+    }
+
+
+
+    // Decoding Pipeline
+
+    function createImageElement(blobOrFile) {
+
+        return new Promise((resolve, reject) => {
+
+            const img = new Image();
+
+            const url = URL.createObjectURL(blobOrFile);
+
+            img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+
+            img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
+
+            img.src = url;
+
+        });
+
+    }
+
+
+
+    function canvasToBlob(canvas) {
+
+        return new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+
+    }
+
+
+
+    async function tryScanIsolated(blob) {
+
+        const file = new File([blob], "temp.png", { type: "image/png" });
+
+        let scanner = null;
+
+        try {
+
+            scanner = new Html5Qrcode("qrTempRegion");
+
+            return await scanner.scanFile(file, false);
+
+        } catch (e) {
+
+            return null;
+
+        } finally {
+
+            if (scanner) { try { await scanner.clear(); } catch (e) {} }
+
+        }
+
+    }
+
+
+
+    async function decodeImageRobust(blobOrFile) {
+
+        const img = await createImageElement(blobOrFile);
+
+        let { width, height } = img;
+
+        if (!width || !height) return null;
+
+
+
+        const maxDim = 1280;
+
+        if (width > maxDim || height > maxDim) {
+
+            if (width > height) { height = Math.round((height * maxDim) / width); width = maxDim; }
+
+            else { width = Math.round((width * maxDim) / height); height = maxDim; }
+
+        }
+
+
+
+        const canvas = document.createElement("canvas");
+
+        canvas.width = width;
+
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+
+
+        if (nativeDetector) {
+
+            try {
+
+                const res = await nativeDetector.detect(canvas);
+
+                if (res && res.length > 0 && res[0].rawValue) return res[0].rawValue;
+
+            } catch (e) {}
+
+        }
+
+
+
+        let blob = await canvasToBlob(canvas);
+
+        let zx = await tryScanIsolated(blob);
+
+        if (zx) return zx;
+
+
+
+        const imgData = ctx.getImageData(0, 0, width, height);
+
+        const d = imgData.data;
+
+        for (let i = 0; i < d.length; i += 4) {
+
+            const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+
+            const val = Math.min(255, Math.max(0, 1.85 * (gray - 128) + 128));
+
+            d[i] = val; d[i + 1] = val; d[i + 2] = val;
+
+        }
+
+        ctx.putImageData(imgData, 0, 0);
+
+
+
+        if (nativeDetector) {
+
+            try {
+
+                const res = await nativeDetector.detect(canvas);
+
+                if (res && res.length > 0 && res[0].rawValue) return res[0].rawValue;
+
+            } catch (e) {}
+
+        }
+
+        blob = await canvasToBlob(canvas);
+
+        zx = await tryScanIsolated(blob);
+
+        if (zx) return zx;
+
+
+
+        const invData = ctx.getImageData(0, 0, width, height);
+
+        const id = invData.data;
+
+        for (let i = 0; i < id.length; i += 4) {
+
+            id[i] = 255 - id[i]; id[i + 1] = 255 - id[i + 1]; id[i + 2] = 255 - id[i + 2];
+
+        }
+
+        ctx.putImageData(invData, 0, 0);
+
+
+
+        if (nativeDetector) {
+
+            try {
+
+                const res = await nativeDetector.detect(canvas);
+
+                if (res && res.length > 0 && res[0].rawValue) return res[0].rawValue;
+
+            } catch (e) {}
+
+        }
+
+        blob = await canvasToBlob(canvas);
+
+        zx = await tryScanIsolated(blob);
+
+        if (zx) return zx;
+
+
+
+        return null;
+
+    }
+
+
+
+    async function handleQrFile(input) {
+
+        if (!input.files || input.files.length === 0) return;
+
+        const file = input.files[0];
+
+        showToast("解析中...", "loading", 0);
+
+        try {
+
+            const text = await decodeImageRobust(file);
+
+            if (text) onScanSuccess(text);
+
+            else showToast("未能辨識條碼", "error");
+
+        } catch (e) {
+
+            showToast("解析失敗", "error");
+
+        }
+
+        input.value = "";
+
+    }
+
+
+
+    // Global Paste
+
+    window.addEventListener("paste", async (e) => {
+
+        const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : "";
+
+        if (activeTag === "input" || activeTag === "textarea") return;
+
+        const items = (e.clipboardData || window.clipboardData)?.items;
+
+        if (!items) return;
+
+        for (let i = 0; i < items.length; i++) {
+
+            if (items[i].type && items[i].type.indexOf("image") !== -1) {
+
+                const blob = items[i].getAsFile();
+
+                if (blob) {
+
+                    e.preventDefault();
+
+                    showToast("讀取貼上圖片...", "loading", 0);
+
+                    const text = await decodeImageRobust(blob);
+
+                    if (text) onScanSuccess(text);
+
+                    else showToast("未能辨識條碼", "error");
+
+                    return;
+
+                }
+
+            }
+
+        }
+
+    });
+
+
+
+    function triggerScanSuccessFlash() {
+
+        let el = document.getElementById("scanSuccessFlash");
+
+        if (!el) {
+
+            el = document.createElement("div");
+
+            el.id = "scanSuccessFlash";
+
+            el.className = "scan-success-flash";
+
+            document.body.appendChild(el);
+
+        }
+
+        el.style.opacity = "1";
+
+        setTimeout(() => {
+
+            el.style.opacity = "0";
+
+            setTimeout(() => {
+
+                if (el.parentNode) el.parentNode.removeChild(el);
+
+            }, 550);
+
+        }, 350);
+
+    }
+
+
+
+    function onScanSuccess(decodedText) {
+
+        if (scanCooldown || decodedText === lastScanText) return;
+
+        scanCooldown = true;
+
+        lastScanText = decodedText;
+
+        setTimeout(() => { scanCooldown = false; }, 2000);
+
+
+
+        // 1. Audio tone & tactile feedback
+
+        playScanBeep();
+
+        if (navigator.vibrate) {
+
+            navigator.vibrate([80, 40, 80]);
+
+        }
+
+        triggerScanSuccessFlash();
+
+
+
+        // 2. Camera auto-close behavior (respects checkbox)
+
+        const autoClose = document.getElementById("autoCloseCam")?.checked;
+
+        if (autoClose && isCameraOpen) {
+
+            toggleCameraView();
+
+        }
+
+
+
+        // 3. Clear concise toast & log
+
+        const selectedPrompt = selectedActivePrompt();
+
+        const qrPrompts = activePromptCandidates.filter(item => item.type === "qrcode");
+
+        if (selectedPrompt?.type === "qrcode" || qrPrompts.length === 1) {
+
+            if (selectedPrompt?.type !== "qrcode") selectActivePrompt(qrPrompts[0].key);
+
+            showToast("掃描成功，正在確認 QR 點名…", "loading", 3000);
+
+            addLog("掃描到 QR，正在送出目前點名", "ok");
+
+            submitActivePrompt(decodedText);
+
+            return;
+
+        }
+
+        if (qrPrompts.length > 1) {
+
+            showToast("請先選擇要提交的 QR 點名帳號", "error", 4000);
+
+            return;
+
+        }
+
+        showToast(autoClose ? "掃描成功，相機已收合並送出" : "掃描成功！正在送出代簽...", "success", 3000);
+
+        addLog("掃描到 QR，正在送出", "ok");
+
+
+
+        const profile = document.getElementById("targetProfileSelect").value || "all";
+
+        fetch("/api/submit", {
+
+            method: "POST",
+
+            headers: { "Content-Type": "application/json" },
+
+            body: JSON.stringify({ payload: decodedText, profile })
+
+        }).then(r => r.json()).then(res => {
+
+            if (res.details && res.details.length > 0) {
+
+                res.details.forEach(item => {
+
+                    const r = item.result || {};
+
+                    const msg = r.reply || r.status || (r.ok ? "簽到成功" : "失敗");
+
+                    liveFeedbackMap[item.profile] = {
+
+                        text: msg,
+
+                        state: r.ok ? "success" : "warn",
+
+                        time: new Date().toLocaleTimeString()
+
+                    };
+
+                    addLog(`${item.profile} 簽到回傳: ${msg}`, r.ok ? "ok" : "err");
+
+                });
+
+            }
+
+            const allConfirmed = (res.details || []).length > 0 && res.details.every(i => i.result?.ok);
+
+            showToast(res.message || (allConfirmed ? "出席已確認" : "已送出"), allConfirmed ? "success" : res.ok ? "loading" : "error");
+
+            fetchStatus(true);
+
+        }).catch(async () => {
+
+            try {
+
+                await broadcastMqtt(decodedText);
+
+                showToast("已送出中繼廣播", "loading");
+
+                addLog("條碼已送至 MQTT 中繼頻道", "ok");
+
+            } catch (err) {
+
+                showToast("連線失敗", "error");
+
+            }
+
+        });
+
+    }
+
+
+
+    // MQTT
+
+    function setupMqtt() {
+
+        if (typeof mqtt === "undefined") return;
+
+        mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt', {
+
+            clientId: 'd_' + Math.random().toString(16).substr(2, 8)
+
+        });
+
+    }
+
+
+
+    function broadcastMqtt(payload) {
+
+        if (!mqttClient || !mqttClient.connected) return Promise.reject(new Error("MQTT disconnected"));
+
+        return new Promise((resolve, reject) => {
+
+            mqttClient.publish(`tronclass/qr_relay/${FIXED_MQTT_CHANNEL}`, payload, { qos: 1 }, err => err ? reject(err) : resolve());
+
+        });
+
+    }
+
+
+
+    // Lifecycle with bandwidth optimization
+
+    let pollTimer = null;
+
+    function startPolling() {
+
+        if (!pollTimer) {
+
+            pollTimer = setInterval(() => {
+
+                if (!document.hidden) fetchStatus(false);
+
+            }, 2500);
+
+        }
+
+    }
+
+    function stopPolling() {
+
+        if (pollTimer) {
+
+            clearInterval(pollTimer);
+
+            pollTimer = null;
+
+        }
+
+    }
+
+
+
+    window.addEventListener("DOMContentLoaded", () => {
+
+        fetchStatus(true);
+
+        startPolling();
+
+        window.addEventListener("focus", () => { if (!document.hidden) fetchStatus(true); });
+
+        document.addEventListener("visibilitychange", () => {
+
+            if (document.hidden) {
+
+                stopPolling();
+
+            } else {
+
+                fetchStatus(true);
+
+                startPolling();
+
+            }
+
+        });
+
+        setupMqtt();
+
+        initNativeBarcodeDetector();
+
+    });
+
+</script>
+
+</body>
+
+</html>
+

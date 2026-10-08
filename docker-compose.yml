@@ -1,0 +1,29 @@
+services:
+  auto-rollcall:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PORT:-10000}:${PORT:-10000}"
+    environment:
+      - TRON_ACCOUNTS_JSON
+      - TRON_PROFILE
+      - TRON_USER
+      - TRON_PASS
+      - TRON_SCHOOL
+      - TRON_DISCORD_GATEWAY_ENABLED
+      - TRON_DISCORD_ADMIN_IDS
+      - TRON_MQTT_CHANNEL
+      - DISCORD_BOT_TOKEN
+      - DISCORD_APPLICATION_ID
+      - DISCORD_GUILD_ID
+      - DISCORD_CHANNEL_ID
+      - PORT
+    volumes:
+      - type: bind
+        source: ./config.advanced.yaml
+        target: /app/config.advanced.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      - ./state:/app/state
+      - ./log:/app/log

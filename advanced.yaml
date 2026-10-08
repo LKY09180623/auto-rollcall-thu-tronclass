@@ -1,0 +1,8 @@
+integrations:
+  discord:
+    enable: true
+  admins:
+    discord: ["862506419508477953"]
+  bindings:
+    "discord:862506419508477953":
+      profile: "A113280040"
