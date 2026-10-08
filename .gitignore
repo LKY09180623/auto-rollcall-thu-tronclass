@@ -45,6 +45,7 @@ config-broken-*.yaml
 dynamic_accounts.json
 probe_log.jsonl
 probe_status.json
+paused_accounts.json
 
 # Local release/build artifacts. Rebuild with:
 #   python -m troTHU.tron release-build --execute --json
