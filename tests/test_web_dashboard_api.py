@@ -57,6 +57,22 @@ class WebDashboardApiTest(unittest.TestCase):
         self.assertEqual(data["status"], "ok")
         self.assertIn("accounts", data)
 
+    def test_status_includes_actual_check_age_for_freshness_and_input_prompt(self):
+        config = {"accounts": {"profiles": {"primary": {}}}}
+        with (
+            patch("troTHU.runtime_context.load_config", return_value=config),
+            patch("troTHU.runtime_context.cookie_report", return_value={"exists": True, "valid": True}),
+            patch("troTHU.account_runtime_store.runtime_profile_summary", return_value={
+                "monitor_state": "running", "last_check": {"status": "is_number", "timestamp": 100, "rollcall_id": "88"}
+            }),
+            patch("render_start.time.time", return_value=105),
+        ):
+            self.conn.request("GET", "/api/status")
+            response = self.conn.getresponse()
+            account = json.loads(response.read())["accounts"][0]
+        self.assertEqual(account["last_check"]["age_seconds"], 5)
+        self.assertEqual(account["last_check"]["rollcall_id"], "88")
+
     def test_post_api_submit_empty(self):
         self.conn.request("POST", "/api/submit", body=json.dumps({"payload": ""}), headers={"Content-Type": "application/json"})
         resp = self.conn.getresponse()

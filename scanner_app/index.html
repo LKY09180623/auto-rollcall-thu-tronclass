@@ -900,6 +900,14 @@
 
 
 
+        .acc-badge.warn { color: #fde68a; background: rgba(245, 158, 11, .14); }
+        .account-card.warn { border-color: #b45309; }
+        .status-pill.warning { border-color: #b45309; color: #fde68a; background: rgba(245, 158, 11, .1); }
+        .acc-status-detail { font-size: .82rem; line-height: 1.6; margin: 8px 0; color: var(--text); }
+        .acc-status-action { color: var(--text-muted); margin-top: 4px; }
+        #systemNotice { padding: 12px; border: 1px solid #b45309; border-radius: 12px; color: #fde68a; line-height: 1.6; }
+        #systemNotice[hidden] { display: none; }
+
         .acc-badge.active {
 
             background: rgba(245, 158, 11, 0.2);
@@ -1800,15 +1808,17 @@
 
         <div class="summary-sep">|</div>
 
-        <div class="summary-item"><span class="summary-label">在線監控</span><span id="statActive" class="summary-val" style="color:var(--success);">0</span></div>
+        <div class="summary-item"><span class="summary-label">正常監控</span><span id="statActive" class="summary-val" style="color:var(--success);">0</span></div>
 
         <div class="summary-sep">|</div>
 
-        <div class="summary-item"><span class="summary-label">暫停代簽</span><span id="statPaused" class="summary-val" style="color:var(--text-muted);">0</span></div>
+        <div class="summary-item"><span class="summary-label">已暫停</span><span id="statPaused" class="summary-val" style="color:var(--text-muted);">0</span></div>
 
     </div>
 
 
+
+    <div id="systemNotice" role="status" hidden></div>
 
     <!-- Accounts Dashboard Cards -->
 
@@ -2232,7 +2242,7 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
             const age = check.age_seconds;
 
-            if (!type || !/^[0-9]+$/.test(rollcallId) || account.paused || account.heartbeat_stale
+            if (!type || !/^[0-9]+$/.test(rollcallId) || rollcallStatus(account).tone !== "active" || account.paused || account.heartbeat_stale
 
                     || account.monitor_state !== "running" || typeof age !== "number" || !Number.isFinite(age) || age > 12) return [];
 
@@ -2383,7 +2393,7 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
             feedback.innerText = message;
 
             liveFeedbackMap[prompt.profile] = {
-
+                rollcallId: prompt.rollcallId,
                 text: message, state: detail.ok ? "success" : "warn", time: new Date().toLocaleTimeString()
 
             };
@@ -2419,6 +2429,7 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
     // Status Polling with Streaming Return Logs
 
     let statusRequestInFlight = false;
+    let statusConnectionFailed = false;
 
     async function fetchStatus(isManual = false) {
 
@@ -2435,13 +2446,14 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
             const data = await resp.json();
 
             if (data.status === "error") {
-
-                showToast("配置警告: " + (data.error || "未知錯誤"), "warn", 5000);
-
-                addLog("系統配置警告: " + (data.error || "未知錯誤"), "err");
+                if (!statusConnectionFailed) showToast("無法讀取監控設定，請查看服務紀錄。", "warn", 5000);
 
             }
 
+            if (data.status === "error") throw new Error("status_unavailable");
+            if (statusConnectionFailed) addLog("已重新連上監控服務，正在顯示最新狀態。", "ok");
+            statusConnectionFailed = false;
+            document.getElementById("systemNotice").hidden = true;
             currentAccountsData = data.accounts || [];
 
             renderDashboard(currentAccountsData);
@@ -2454,7 +2466,8 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
             const pausedCount = currentAccountsData.filter(a => a.paused).length;
 
-            const activeMonitoring = currentAccountsData.filter(a => !a.paused).length;
+            const activeMonitoring = currentAccountsData.filter(a => !a.paused && a.monitor_state === "running" && !a.heartbeat_stale && rollcallStatus(a).tone !== "warn").length;
+            const issueCount = currentAccountsData.filter(a => rollcallStatus(a).tone === "warn").length;
 
             const activeRollcalls = currentAccountsData.filter(a => !a.paused && rollcallStatus(a).tone === "active").length;
 
@@ -2477,8 +2490,9 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
             const pill = document.getElementById("systemPill");
 
             pill.className = "status-pill";
+            if (issueCount > 0) pill.classList.add("warning");
 
-            document.getElementById("systemPillText").innerText = activeRollcalls > 0
+            document.getElementById("systemPillText").innerText = issueCount > 0 ? `${issueCount} 個帳號需要留意` : activeRollcalls > 0
 
                 ? `${activeRollcalls} 點名中`
 
@@ -2512,9 +2526,17 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
             pill.className = "status-pill offline";
 
-            document.getElementById("systemPillText").innerText = "離線";
+            document.getElementById("systemPillText").innerText = "監控服務暫時無回應";
+            const notice = document.getElementById("systemNotice");
+            notice.hidden = false;
+            notice.innerText = "目前連不上監控服務，以下卡片可能是舊資料，尚未確認簽到。系統會自動重連；請先查看官方出席紀錄。";
+            activePromptCandidates = [];
+            renderActivePrompt();
+            renderDashboard(currentAccountsData.map(account => ({...account, service_offline: true})));
+            document.getElementById("statActive").innerText = "0";
 
-            addLog("連線中斷，正在自動重試...", "err");
+            if (!statusConnectionFailed) addLog("監控服務暫時無回應，正在自動重連；簽到結果尚未確認。", "err");
+            statusConnectionFailed = true;
 
         } finally {
 
@@ -2542,13 +2564,13 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
 
 
-            if (prevAge === undefined || Math.abs(age - prevAge) >= 3 || st.tone === "active") {
+            if (prevAge !== st.label) {
 
-                lastLoggedAges[acc.name] = age;
+                lastLoggedAges[acc.name] = st.label;
 
-                const statusDesc = `${acc.name}: ${st.label} (Cookie ${isCookieOk ? '正常' : '需登入'}, 巡檢 ${age}s前)`;
+                const statusDesc = `${acc.name}：${st.label}。${st.explanation}`;
 
-                const logType = st.tone === "active" ? "highlight" : (isCookieOk ? "ok" : "err");
+                const logType = st.tone === "active" ? "highlight" : (st.tone === "warn" ? "err" : "ok");
 
                 addLog(statusDesc, logType);
 
@@ -2621,46 +2643,56 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
 
     function rollcallStatus(account) {
-
-        if (account.paused) {
-
-            return { label: "已暫停", tone: "paused", age: null };
-
-        }
-
         const checked = account.last_check || {};
-
+        const error = account.last_error || {};
         const age = typeof checked.age_seconds === "number" ? Math.max(0, Math.round(checked.age_seconds)) : null;
-
+        const state = (label, tone, explanation, action = "") => ({label, tone, explanation, action, age});
+        if (account.service_offline) return state("監控服務暫時無回應", "warn", "目前無法更新這個帳號的點名狀態，先前的結果可能已過期。", "系統會自動重連；請先查看官方出席紀錄。");
+        if (account.paused) return state("已暫停", "paused", "這個帳號目前不會查詢或提交點名。", "按「啟用」恢復監控。");
+        const latestError = error.status && (!checked.timestamp || !error.timestamp || error.timestamp >= checked.timestamp);
+        if (account.monitor_state === "restarting" || (latestError && error.status === "fatal_error")) {
+            const reason = /samesite|reserved key/i.test(error.message || "") ? "登入資料格式發生錯誤" : "監控程式發生錯誤";
+            return state("監控正在重啟", "warn", `${reason}，正在自動恢復；這段期間的簽到尚未確認。`, "先查看官方出席紀錄；若一直重啟，請更新服務。");
+        }
+        if (latestError) {
+            if (["unauthorized", "login_failed", "login_expired"].includes(error.status)) return state("需要重新登入", "warn", "登入狀態已失效或登入未成功，目前無法確認簽到。", "按「重新登入」；若仍失敗，請確認帳號與密碼。");
+            if (error.status === "rate_limited" || /429/.test(error.message || "")) return state("學校限制查詢頻率", "warn", "請求暫時受到限制，尚未確認簽到。", "稍候再更新，先不要重複送出。");
+            if (["network_error", "tron_http_error", "request_failed"].includes(error.status)) return state("暫時連不上學校", "warn", "目前無法取得最新點名結果，系統會依重試設定恢復查詢。", "先查看官方出席紀錄，連線恢復後再確認。");
+            return state("監控遇到問題", "warn", "最近一次操作未完成，尚未確認簽到。", "按「更新狀態」；若持續失敗，請查看服務紀錄。");
+        }
+        const login = account.last_login || {};
+        if (login.status && login.ok === false && (!checked.timestamp || login.timestamp >= checked.timestamp)) {
+            const reason = login.status === "missing_credentials" ? "帳號或密碼尚未設定完整。" : login.status === "rejected" ? "學校未接受登入，請確認帳號、密碼及官方登入提示。" : login.status === "transient_error" ? "登入時暫時連不上學校。" : "尚未取得有效的登入狀態。";
+            return state("登入尚未完成", "warn", reason + "目前無法確認簽到。", "按「重新登入」；若持續失敗，請查看帳號設定或服務紀錄。");
+        }
+        if (account.monitor_state === "standby") return state("排程外休眠", "", "目前不在設定的監控時段，暫時不查詢點名。", "進入上課時段後會自動恢復。");
+        if (account.heartbeat_stale || account.monitor_state === "stopped") return state("監控已中斷", "warn", "這個帳號的監控已停止或長時間沒有回報，畫面不是最新結果。", "請查看服務是否運作，並到官方頁面確認出席。");
+        if (account.monitor_state !== "running") return state("監控啟動中", "", "尚未收到這個帳號的監控回報。", "稍候更新；若持續沒有回報，請查看服務紀錄。");
+        const submission = account.last_submission || {};
+        if (checked.status === "submitted_unconfirmed" || (submission.status === "submitted_unconfirmed"
+                && String(submission.rollcall_id) === String(checked.rollcall_id)
+                && ["is_number", "unsupported_qrcode"].includes(checked.status))) {
+            return state("已送出，等待確認", "warn", "資料已送出，但還沒查到你的個人出席成功紀錄。", "請先查看官方出席紀錄，避免重複送出。");
+        }
+        if (age === null || age > 12) return state("點名狀態尚未更新", "warn", age === null ? "尚未取得學校的點名回應。" : `已 ${age} 秒沒有新的點名回應，無法確認目前狀態。`, "按「更新狀態」，並留意官方點名頁面。");
         const states = {
-
-            is_number: ["正在數字點名", "active"],
-
-            is_radar: ["正在雷達點名", "active"],
-
-            unsupported_radar: ["雷達點名", "active"],
-
-            unsupported_qrcode: ["QR 等待簽到", "active"],
-
-            on_call_fine: ["已簽到", "confirmed"],
-
-            not_call: ["無點名", ""],
-
-            not_start: ["未開始", ""],
-
-            idle: ["監控中", ""],
-
-            error: ["檢查失敗", "warn"]
-
+            is_number: ["等待數字碼", "active", "已偵測到數字點名，尚未確認簽到。", "在上方輸入老師公布的 4 位數字，輸入完成會立即送出。"],
+            is_radar: ["雷達點名處理中", "active", "已偵測到雷達點名，正在等待個人出席確認。", "若一直沒有成功，請開啟官方 App 完成點名。"],
+            unsupported_radar: ["需要官方 App 點名", "warn", "目前的雷達點名無法由這個工具完成。", "請在官方 App 依課程規定完成點名。"],
+            unsupported_qrcode: ["等待 QR Code", "active", "已偵測到 QR 點名，尚未確認簽到。", "在上方貼上或掃描老師目前顯示的 QR，取得內容後會立即送出。"],
+            submitted_unconfirmed: ["已送出，等待確認", "warn", "資料已送出，但還沒查到你的個人出席成功紀錄。", "請先查看官方出席紀錄，避免重複送出。"],
+            on_call_fine: ["已確認簽到", "confirmed", "已查到你的個人出席紀錄為已簽到。"],
+            number_submitted: ["已確認簽到", "confirmed", "數字點名已送出，且已查到個人出席成功紀錄。"],
+            qrcode_submitted: ["已確認簽到", "confirmed", "QR 點名已送出，且已查到個人出席成功紀錄。"],
+            radar_failed: ["雷達點名未完成", "warn", "這次處理未能確認你的出席狀態。", "請開啟官方 App 確認並完成點名。"],
+            not_call: ["目前沒有點名", "", "最近一次查詢沒有進行中的點名，系統會繼續監控。"],
+            not_start: ["點名尚未開始", "", "活動尚未開放提交，系統會繼續監控。"],
+            idle: ["正在監控", "", "正在等待新的點名活動。"],
+            error: ["查詢未完成", "warn", "最近一次查詢失敗，尚未取得最新點名結果。", "按「更新狀態」；若持續失敗，請查看官方點名頁面。"]
         };
-
-        const state = states[checked.status] || [checked.status || "監控中", ""];
-
-        return { label: state[0], tone: state[1], age };
-
+        const result = states[checked.status];
+        return result ? state(...result) : state("點名結果待確認", "warn", "收到的狀態尚無法判斷為簽到成功。", "請查看官方出席紀錄。");
     }
-
-
 
     // Render Dashboard Cards
 
@@ -2730,6 +2762,7 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
             if (isPaused) dotClass += " paused";
 
+            else if (st.tone === "warn") dotClass += " bad";
             else if (st.tone === "active") dotClass += " active";
 
             else if (!isCookieOk) dotClass += " bad";
@@ -2742,6 +2775,7 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
             if (isPaused) cardClass += " paused";
 
+            else if (st.tone === "warn") cardClass += " warn";
             else if (st.tone === "active") cardClass += " active";
 
             else if (st.tone === "confirmed") cardClass += " confirmed";
@@ -2752,6 +2786,7 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
             if (isPaused) badgeClass += " paused";
 
+            else if (st.tone === "warn") badgeClass += " warn";
             else if (st.tone === "active") badgeClass += " active";
 
             else if (st.tone === "confirmed") badgeClass += " confirmed";
@@ -2762,9 +2797,10 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
             let liveReturnHtml = "";
 
-            if (liveMsg) {
+            if (liveMsg && (!liveMsg.rollcallId || String(liveMsg.rollcallId) === String(rollcallId))
+                    && (liveMsg.state !== "success" || st.tone === "confirmed")) {
 
-                liveReturnHtml = `<div class="acc-live-return ${liveMsg.state}">${escapeHtml(liveMsg.text)} ${liveMsg.time ? `<span style="opacity:0.65; font-size:0.7rem;">(${liveMsg.time})</span>` : ''}</div>`;
+                liveReturnHtml = `<div class="acc-live-return ${liveMsg.state}">上次操作：${escapeHtml(liveMsg.text)} ${liveMsg.time ? `<span style="opacity:0.65; font-size:0.7rem;">(${liveMsg.time})</span>` : ''}</div>`;
 
             }
 
@@ -2792,27 +2828,26 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
                         </div>
 
-                        <span class="${badgeClass}">${st.label}</span>
+                        <span class="${badgeClass}">${escapeHtml(st.label)}</span>
 
                     </div>
 
+                    <div class="acc-status-detail">${escapeHtml(st.explanation)}${st.action ? `<div class="acc-status-action">${escapeHtml(st.action)}</div>` : ""}</div>
                     ${liveReturnHtml}
 
                     <div class="acc-bottom">
 
                         <div class="acc-meta">
 
-                            <span>Cookie: ${isCookieOk ? '正常' : '需登入'}</span>
-
-                            <span>${isPaused ? '已暫停' : (st.age === null ? '-' : `${st.age}s`)}</span>
+                            <span>${isPaused ? '已暫停' : (st.age === null ? '尚無查詢紀錄' : `上次查詢 ${st.age} 秒前`)}</span>
 
                         </div>
 
                         <div class="acc-actions">
 
-                            <button id="btnCheck-${escapeHtml(acc.name)}" class="btn-mini" onclick="forceCheck('${escapeHtml(acc.name)}')">檢查</button>
+                            <button id="btnCheck-${escapeHtml(acc.name)}" class="btn-mini" onclick="forceCheck('${escapeHtml(acc.name)}')">更新狀態</button>
 
-                            <button id="btnReauth-${escapeHtml(acc.name)}" class="btn-mini" onclick="reauth('${escapeHtml(acc.name)}')">登入</button>
+                            <button id="btnReauth-${escapeHtml(acc.name)}" class="btn-mini" onclick="reauth('${escapeHtml(acc.name)}')">重新登入</button>
 
                             ${togglePauseBtn}
 

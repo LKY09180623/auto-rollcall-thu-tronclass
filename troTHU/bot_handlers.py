@@ -61,6 +61,18 @@ except ImportError:  # pragma: no cover - script execution fallback
 SessionFactory = Callable[[], Any]
 
 
+def login_failure_message(status: str) -> str:
+    reasons = {
+        'missing_credentials': '尚未設定完整帳號與密碼，請先檢查帳號設定。',
+        'rejected': '學校未接受登入，請確認帳號、密碼與官方登入頁面的提示。',
+        'transient_error': '登入時暫時連不上學校，請稍候再試。',
+        'login_page_changed': '學校登入頁面已變更，需要更新登入程式。',
+        'missing_session': '登入後未取得有效的登入狀態，請在官方頁面確認是否需要額外驗證。',
+        'manual_cookie_required': '此學校需要先匯入官方登入資料，請檢查登入設定。',
+    }
+    return reasons.get(status, '目前未能建立有效登入，請查看官方登入頁面或服務紀錄。')
+
+
 class BotHandlerBridge:
     def __init__(
         self,
@@ -276,14 +288,22 @@ class BotHandlerBridge:
                 if not login_result.ok:
                     self.record_profile_error(profile, "login_failed", login_result.status)
                     return {
-                        "reply": "Force check failed: login {}.".format(login_result.status),
+                        "reply": "未能更新點名狀態：" + login_failure_message(login_result.status),
+                        "ok": False,
                         "status": "login_failed",
                         "login": login_result.status,
                     }
                 result = await self.tron.check_rollcall(session, -1)
                 self.record_check_result(profile, result)
         return {
-            "reply": "Force check completed for {}: {}.".format(profile, result),
+            "reply": "已更新點名狀態。" + {
+                'not call': '目前沒有進行中的點名。',
+                'not_call': '目前沒有進行中的點名。',
+                'on_call_fine': '已查到你的個人出席紀錄為已簽到。',
+                'is_number': '請輸入老師公布的 4 位數字碼。',
+                'unsupported_qrcode': '請貼上或掃描目前的 QR Code。',
+            }.get(result, '請查看帳號卡片上的目前結果與處理方式。'),
+            "ok": True,
             "status": "ok",
             "result": result,
             "admin": admin,
@@ -294,8 +314,10 @@ class BotHandlerBridge:
             async with self.session_context() as session:
                 result = await self.ensure_login(session, force=True)
                 self.record_login_result(profile, result)
+                if not result.ok:
+                    self.record_profile_error(profile, 'login_failed', result.status)
         return {
-            "reply": "Reauth {} for {}.".format("succeeded" if result.ok else result.status, profile),
+            "reply": "已重新登入，接下來會更新點名狀態；登入成功不代表已完成簽到。" if result.ok else "重新登入失敗：" + login_failure_message(result.status),
             "status": result.status,
             "ok": result.ok,
             "admin": admin,
@@ -346,7 +368,7 @@ class BotHandlerBridge:
                 self.record_profile_error(profile, "login_failed", login_result.status)
                 return {
                     "ok": False, "status": "login_failed", "login": login_result.status,
-                    "reply": "登入未成功（{}）；這次未完成點名，請稍後再試或重新登入。".format(login_result.status),
+                    "reply": "這次點名未完成：" + login_failure_message(login_result.status),
                 }
             result = await operation()
             if result.get("status") != "login_failed" or refresh:

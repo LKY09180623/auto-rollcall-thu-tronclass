@@ -42,6 +42,10 @@ def decide_rollcall(rollcalls: Any) -> RollcallDecision:
     for rollcall in rollcalls:
         if not isinstance(rollcall, dict):
             continue
+        if rollcall.get("status") == "on_call_fine":
+            if first_on_call_fine is None:
+                first_on_call_fine = rollcall
+            continue
         if rollcall.get("is_number"):
             first_supported_number = rollcall
             break
@@ -50,10 +54,6 @@ def decide_rollcall(rollcalls: Any) -> RollcallDecision:
         ).lower():
             first_supported_radar = rollcall
             break
-        if rollcall.get("status") == "on_call_fine":
-            if first_on_call_fine is None:
-                first_on_call_fine = rollcall
-            continue
         status, rollcall_type, message = classify_rollcall(rollcall)
         if status == "unsupported_qrcode" and first_qrcode is None:
             first_qrcode = (status, rollcall, rollcall_type, message)

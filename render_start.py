@@ -324,6 +324,9 @@ def make_handler(supervisor: ProcessSupervisor):
                     accounts_data = []
                     for name in profiles:
                         p_summary = runtime_profile_summary(runtime_state, name)
+                        last_check = dict(p_summary.get("last_check") or {})
+                        checked_at = last_check.get("timestamp")
+                        last_check["age_seconds"] = max(0, time.time() - checked_at) if isinstance(checked_at, (int, float)) and checked_at > 0 else None
                         cookie = ctx.cookie_report(name)
                         pending = [item.to_dict() for item in list_pending_qr(ROOT) if item.profile == name]
                         is_paused = name in paused_set
@@ -332,9 +335,10 @@ def make_handler(supervisor: ProcessSupervisor):
                             "paused": is_paused,
                             "monitor_state": "paused" if is_paused else (p_summary.get("monitor_state") or "running"),
                             "cookie_valid": bool(cookie.get("exists") and cookie.get("valid")),
-                            "last_check": p_summary.get("last_check") or {},
+                            "last_check": last_check,
                             "last_login": p_summary.get("last_login") or {},
                             "last_error": p_summary.get("last_error") or {},
+                            "last_submission": p_summary.get("last_submission") or {},
                             "pending_count": len(pending),
                             "heartbeat_stale": bool(p_summary.get("heartbeat_stale")),
                         })
@@ -447,7 +451,7 @@ def make_handler(supervisor: ProcessSupervisor):
                         res = asyncio.run(bridge.force_check(profile=p, command=cmd, admin=True))
                         results.append({"profile": p, "result": res})
                         msgs.append("{}: {}".format(p, res.get("reply") or res.get("status")))
-                    return self._send_json({"ok": True, "message": "; ".join(msgs), "details": results})
+                    return self._send_json({"ok": any(item["result"].get("ok") for item in results), "message": "; ".join(msgs), "details": results})
 
                 elif self.path == "/api/reauth":
                     results = []

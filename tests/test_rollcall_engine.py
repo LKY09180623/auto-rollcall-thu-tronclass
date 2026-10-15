@@ -16,6 +16,13 @@ class RollcallEngineTest(unittest.TestCase):
             ("unsupported_rollcall", "unknown", "偵測到未支援的點名類型"),
         )
 
+    def test_confirmed_number_and_radar_are_not_requested_again(self):
+        for kind in ('is_number', 'is_radar', 'is_qrcode'):
+            confirmed = {kind: True, 'rollcall_id': 88, 'status': 'on_call_fine'}
+            self.assertEqual(decide_rollcall([confirmed]).status, 'on_call_fine')
+            pending = {'is_qrcode': True, 'rollcall_id': 89, 'status': 'in_progress'}
+            self.assertEqual(decide_rollcall([confirmed, pending]).rollcall['rollcall_id'], 89)
+
     def test_decide_rollcall_prefers_number_then_radar_then_qr(self) -> None:
         number = {"is_number": True, "rollcall_id": 42}
         decision = decide_rollcall([{"is_qrcode": True, "rollcall_id": 9}, number])

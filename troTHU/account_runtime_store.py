@@ -210,6 +210,13 @@ def mark_check_result(
     rollcall_id: Any = "",
     rollcall_type: str = "",
 ) -> Dict[str, Any]:
+    submission = {}
+    if status in {'submitted_unconfirmed', 'number_submitted', 'qrcode_submitted'}:
+        submission['last_submission'] = {
+            'status': _safe_text(status, limit=80),
+            'rollcall_id': _safe_text(rollcall_id, limit=80),
+            'timestamp': _now(),
+        }
     return update_profile_runtime_state(
         base_dir,
         profile,
@@ -220,6 +227,7 @@ def mark_check_result(
             "timestamp": _now(),
         },
         last_error={},
+        **submission,
     )
 
 
@@ -265,5 +273,6 @@ def runtime_profile_summary(
         "last_login": record.get("last_login") if isinstance(record.get("last_login"), Mapping) else {},
         "last_check": record.get("last_check") if isinstance(record.get("last_check"), Mapping) else {},
         "last_error": record.get("last_error") if isinstance(record.get("last_error"), Mapping) else {},
+        "last_submission": record.get("last_submission") if isinstance(record.get("last_submission"), Mapping) else {},
         "updated_at": record.get("updated_at"),
     }

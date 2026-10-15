@@ -277,6 +277,12 @@ def build_fatal_error_report(exc: BaseException, restart_count: int) -> ctx.Tupl
 
 
 def report_fatal_exception(exc: BaseException, restart_count: int) -> None:
+    try:
+        profile = ctx.get_active_profile(ctx.CONFIG).name
+        ctx.mark_profile_error(ctx.BASE_DIR, profile, 'fatal_error', exc)
+        ctx.mark_monitor_state(ctx.BASE_DIR, profile, 'restarting')
+    except Exception:
+        pass
     summary, formatted_traceback, fingerprint = ctx.build_fatal_error_report(exc, restart_count)
     text = '{}\n{}\n{}'.format(summary, ctx.normalize_text(exc), formatted_traceback.rstrip())
     ctx.log(event='fatal_error', status='restarting', message=summary, error=exc, extra={'restart_count': restart_count, 'fingerprint': fingerprint, 'traceback': formatted_traceback})
