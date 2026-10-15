@@ -206,18 +206,23 @@ def make_handler(supervisor: ProcessSupervisor):
             use_gzip = "gzip" in accept_enc and len(body) > 400
             if use_gzip:
                 body = gzip.compress(body)
-            self.send_response(status)
-            self.send_header("Content-Type", content_type)
-            self.send_header("Access-Control-Allow-Origin", "*")
-            if use_gzip:
-                self.send_header("Content-Encoding", "gzip")
-            self.send_header("Cache-Control", cache_control)
-            self.send_header("Content-Length", str(len(body)))
-            if extra_headers:
-                for k, v in extra_headers.items():
-                    self.send_header(k, v)
-            self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.send_response(status)
+                self.send_header("Content-Type", content_type)
+                self.send_header("Access-Control-Allow-Origin", "*")
+                if use_gzip:
+                    self.send_header("Content-Encoding", "gzip")
+                self.send_header("Cache-Control", cache_control)
+                self.send_header("Content-Length", str(len(body)))
+                if extra_headers:
+                    for k, v in extra_headers.items():
+                        self.send_header(k, v)
+                self.end_headers()
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                # The client has already left; a second error response cannot
+                # be delivered on the same socket.
+                self.close_connection = True
 
         def _send_json(self, data: dict, status: int = 200):
             body = json.dumps(data, ensure_ascii=False).encode("utf-8")

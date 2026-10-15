@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from http.cookies import CookieError, Morsel, SimpleCookie
 from urllib.parse import urlparse
+
+from yarl import URL
 
 try:  # pragma: no cover - package import path
     import troTHU.runtime_context as ctx
@@ -614,7 +617,30 @@ async def login(session: ctx.aiohttp.ClientSession, *, research_context: bool=Fa
 
 def clone_session_cookies(source: ctx.aiohttp.ClientSession, target: ctx.aiohttp.ClientSession) -> None:
     for cookie in source.cookie_jar:
-        target.cookie_jar.update_cookies({cookie.key: cookie.value})
+        # SameSite, Path, and similar names are cookie attributes, not cookie
+        # names. Some upstream responses expose them as separate morsels.
+        name = str(cookie.key)
+        if name.lower() in Morsel._reserved:
+            continue
+        try:
+            copied = SimpleCookie()
+            copied[name] = cookie.value
+            for attribute in ('domain', 'path', 'expires', 'max-age', 'secure', 'httponly', 'samesite'):
+                value = cookie[attribute]
+                if value:
+                    copied[name][attribute] = value
+            domain = str(cookie['domain'] or '').lstrip('.')
+            if domain:
+                response_url = URL.build(
+                    scheme='https' if cookie['secure'] else 'http',
+                    host=domain,
+                    path=str(cookie['path'] or '/'),
+                )
+                target.cookie_jar.update_cookies(copied, response_url=response_url)
+            else:
+                target.cookie_jar.update_cookies(copied)
+        except (CookieError, ValueError, TypeError):
+            continue
 
 
 def get_session_id_header(session: ctx.aiohttp.ClientSession) -> str:

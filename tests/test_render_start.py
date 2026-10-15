@@ -29,6 +29,23 @@ class RenderStartupTest(unittest.TestCase):
         ctx.CONFIG.clear()
         ctx.CONFIG.update(copy.deepcopy(self.original_config))
 
+    def test_disconnected_client_does_not_trigger_second_error_response(self):
+        handler_class = render_start.make_handler(render_start.ProcessSupervisor([]))
+        for failing_step in ('end_headers', 'write'):
+            handler = object.__new__(handler_class)
+            handler.headers = {}
+            handler.wfile = MagicMock()
+            handler.send_response = MagicMock()
+            handler.send_header = MagicMock()
+            handler.end_headers = MagicMock()
+            handler.close_connection = False
+            if failing_step == 'write':
+                handler.wfile.write.side_effect = BrokenPipeError()
+            else:
+                handler.end_headers.side_effect = BrokenPipeError()
+            handler._send_json({'status': 'ok'})
+            self.assertTrue(handler.close_connection)
+
     def test_two_monitors_share_exactly_one_gateway(self):
         specs = render_start.build_process_specs({}, deployment_env())
         self.assertEqual([item.name for item in specs], ["monitor:primary", "monitor:secondary", "discord-gateway"])

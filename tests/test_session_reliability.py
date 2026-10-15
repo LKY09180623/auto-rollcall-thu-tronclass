@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from http.cookies import SimpleCookie
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import aiohttp
@@ -11,9 +12,28 @@ from yarl import URL
 from tests import test_bot_handlers as fixtures
 from troTHU import tron
 from troTHU.account_store import cookie_path, load_session_cookies, save_session_cookies
+from troTHU.auth_runtime import clone_session_cookies
 
 
 class CookieCacheTest(unittest.IsolatedAsyncioTestCase):
+    async def test_clone_skips_reserved_cookie_names_and_keeps_scope(self):
+        cookies = SimpleCookie()
+        cookies['session'] = 'test-session'
+        cookies['session']['domain'] = 'school.example'
+        cookies['session']['path'] = '/api'
+        cookies['session']['secure'] = True
+        cookies['session']['httponly'] = True
+        cookies['session']['samesite'] = 'Lax'
+        reserved = SimpleNamespace(key='SameSite', value='None')
+        source = SimpleNamespace(cookie_jar=[reserved, cookies['session']])
+        async with aiohttp.ClientSession() as target:
+            clone_session_cookies(source, target)
+            matching = target.cookie_jar.filter_cookies(URL('https://school.example/api/rollcalls'))
+            self.assertEqual(matching['session'].value, 'test-session')
+            self.assertEqual(next(cookie for cookie in target.cookie_jar if cookie.key == 'session')['samesite'], 'Lax')
+            self.assertFalse(target.cookie_jar.filter_cookies(URL('http://school.example/api/rollcalls')))
+            self.assertFalse(target.cookie_jar.filter_cookies(URL('https://other.example/api/rollcalls')))
+
     async def test_round_trip_keeps_sso_domains_paths_and_secure_flags_separate(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
