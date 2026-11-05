@@ -30,15 +30,25 @@ def get_verify_ssl() -> bool:
     return ctx.coerce_bool(ctx.CONFIG.get('config', {}).get('verify_ssl', ctx.DEFAULT_CONFIG['config']['verify_ssl']), ctx.DEFAULT_CONFIG['config']['verify_ssl'])
 
 
+_DEFAULT_SSL_CONTEXT = None
+_ORIG_CREATE_DEFAULT_CONTEXT = ctx.ssl.create_default_context
+
+
 def get_ssl_request_setting(verify_ssl: ctx.Optional[bool]=None) -> ctx.Any:
+    global _DEFAULT_SSL_CONTEXT
     if verify_ssl is None:
         verify_ssl = ctx.get_verify_ssl()
     if not verify_ssl:
         return False
+    use_cache = ctx.ssl.create_default_context is _ORIG_CREATE_DEFAULT_CONTEXT
+    if use_cache and _DEFAULT_SSL_CONTEXT is not None:
+        return _DEFAULT_SSL_CONTEXT
     context = ctx.ssl.create_default_context()
     strict_flag = getattr(ctx.ssl, 'VERIFY_X509_STRICT', 0)
     if strict_flag and hasattr(context, 'verify_flags'):
         context.verify_flags &= ~strict_flag
+    if use_cache and isinstance(context, ctx.ssl.SSLContext):
+        _DEFAULT_SSL_CONTEXT = context
     return context
 
 

@@ -362,3 +362,60 @@ class RenderStartupTest(unittest.TestCase):
 
 
 
+
+
+class StaggerTest(unittest.TestCase):
+    def test_worker_env_gets_distinct_poll_offsets_and_longer_interval(self):
+        many = [{"name": "acc%d" % i, "user": "U%d" % i, "passwd": "p", "school": "usc"} for i in range(4)]
+        env = {"TRON_ACCOUNTS_JSON": json.dumps(many)}
+        specs = [s for s in render_start.build_process_specs({}, env) if s.name.startswith("monitor:")]
+        self.assertEqual(len(specs), 4)
+        offsets = [float(s.environment["TRON_POLL_OFFSET"]) for s in specs]
+        self.assertEqual(len(set(offsets)), 4)
+        interval = float(specs[0].environment["TRON_POLL_INTERVAL"])
+        self.assertEqual(interval, render_start.DEFAULT_POLL_INTERVAL)
+        self.assertTrue(all(0 <= o < interval for o in offsets))
+        self.assertEqual(specs[0].environment["MALLOC_ARENA_MAX"], "2")
+
+    def test_explicit_poll_settings_are_respected(self):
+        env = {"TRON_ACCOUNTS_JSON": json.dumps(ACCOUNTS), "TRON_POLL_INTERVAL": "6", "MALLOC_ARENA_MAX": "4"}
+        spec = next(s for s in render_start.build_process_specs({}, env) if s.name.startswith("monitor:"))
+        self.assertEqual(spec.environment["TRON_POLL_INTERVAL"], "6")
+        self.assertEqual(spec.environment["MALLOC_ARENA_MAX"], "4")
+
+    def test_supervisor_starts_one_child_per_gap_and_stays_healthy_while_waiting(self):
+        specs = [render_start.ProcessSpec("p%d" % i, ("x",), {}) for i in range(3)]
+        supervisor = render_start.ProcessSupervisor(specs, start_gap=3.0)
+        children = [MagicMock() for _ in range(3)]
+        for child in children:
+            child.poll.return_value = None
+        with patch.object(render_start.subprocess, "Popen", side_effect=children) as popen, redirect_stdout(io.StringIO()):
+            supervisor.tick(0)
+            self.assertEqual(popen.call_count, 1)
+            self.assertEqual(supervisor.health()["status"], "ok")
+            supervisor.tick(1)
+            self.assertEqual(popen.call_count, 1)
+            supervisor.tick(3)
+            self.assertEqual(popen.call_count, 2)
+            supervisor.tick(6)
+            self.assertEqual(popen.call_count, 3)
+            self.assertEqual(supervisor.health()["running_processes"], 3)
+
+    @unittest.skipUnless(hasattr(os, "fork"), "requires POSIX fork")
+    def test_forked_process_lifecycle_isolates_child_and_terminates_cleanly(self):
+        spec = render_start.ProcessSpec("monitor:forktest", (sys.executable, "-m", "troTHU.tron", "run", "--no-input"), {"TRON_PROFILE": "forktest"})
+        supervisor = render_start.ProcessSupervisor([spec], use_fork=True)
+
+        def fake_worker(s):
+            self.assertEqual(os.environ.get("TRON_PROFILE"), "forktest")
+            import time as _t
+            _t.sleep(10)
+            return 0
+
+        with patch.object(render_start, "_run_forked_spec", side_effect=fake_worker), redirect_stdout(io.StringIO()):
+            supervisor.tick(0)
+            self.assertEqual(supervisor.health()["running_processes"], 1)
+            child = supervisor.children["monitor:forktest"]
+            self.assertNotEqual(child.pid, os.getpid())
+            supervisor.stop()
+            self.assertIsNotNone(child.poll())

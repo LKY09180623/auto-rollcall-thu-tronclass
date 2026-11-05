@@ -227,6 +227,14 @@ async def monitor_loop(
             legacy_message='非上課時段 (休眠中)',
         )
 
+    try:
+        poll_phase_offset = max(0.0, float(ctx.os.getenv('TRON_POLL_OFFSET') or 0))
+    except ValueError:
+        poll_phase_offset = 0.0
+    if poll_phase_offset:
+        # Stagger polling phases between account processes so they do not all fire together.
+        await ctx.sleep_or_shutdown(shutdown_event, poll_phase_offset)
+
     error_cnt = 0
     while not shutdown_event.is_set():
         now_for_runtime = ctx.time.monotonic()

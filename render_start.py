@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import gc
 import gzip
 import json
 import os
@@ -13,6 +14,7 @@ import subprocess
 import sys
 import threading
 import time
+import zlib
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -58,6 +60,28 @@ class ProcessSpec:
     environment: dict[str, str] = field(repr=False)
 
 
+# Idle poll interval for each account process. The monitor's built-in idle
+# interval is 3s; one extra second lowers sustained load on a small instance.
+DEFAULT_POLL_INTERVAL = 4.0
+# Seconds between starting account processes, so logins and imports do not spike together.
+DEFAULT_START_STAGGER = 3.0
+
+
+def tune_worker_env(worker_env: dict[str, str], name: str, index: int | None = None, count: int | None = None) -> None:
+    """Spread account processes apart: separate poll phases and a smaller allocator footprint."""
+    worker_env.setdefault("MALLOC_ARENA_MAX", "2")
+    try:
+        interval = max(0.5, float(worker_env.get("TRON_POLL_INTERVAL") or DEFAULT_POLL_INTERVAL))
+    except ValueError:
+        interval = DEFAULT_POLL_INTERVAL
+    worker_env["TRON_POLL_INTERVAL"] = "{:g}".format(interval)
+    if index is not None and count:
+        fraction = index / count
+    else:
+        fraction = (zlib.crc32(name.encode("utf-8")) % 1000) / 1000.0
+    worker_env.setdefault("TRON_POLL_OFFSET", "{:.2f}".format(interval * fraction))
+
+
 def build_process_specs(config: dict, environ: Mapping[str, str] | None = None) -> list[ProcessSpec]:
     env = dict(os.environ if environ is None else environ)
     if environ is None:
@@ -79,15 +103,15 @@ def build_process_specs(config: dict, environ: Mapping[str, str] | None = None) 
     accounts = read_environment_accounts(env)
     paused_set = get_paused_accounts(environ) if environ is not None else get_paused_accounts()
     specs = []
-    for account in accounts:
-        if account.name in paused_set:
-            continue
+    active_accounts = [account for account in accounts if account.name not in paused_set]
+    for index, account in enumerate(active_accounts):
         worker_env = dict(env)
         # Each monitor can see only its own profile, including relay callbacks.
         worker_env["TRON_ACCOUNTS_JSON"] = account.worker_json()
         worker_env["TRON_PROFILE"] = account.name
         worker_env.pop("TRON_USER", None)
         worker_env.pop("TRON_PASS", None)
+        tune_worker_env(worker_env, account.name, index, len(active_accounts))
         specs.append(ProcessSpec("monitor:" + account.name,
             (sys.executable, "-m", "troTHU.tron", "run", "--no-input"), worker_env))
     if not accounts:
@@ -114,19 +138,145 @@ def build_process_specs(config: dict, environ: Mapping[str, str] | None = None) 
     return specs
 
 
+_ORIG_POPEN = subprocess.Popen
+
+
+def preload_shared_runtime() -> None:
+    """Import worker modules and warm shared SSL state so forked workers share CoW pages."""
+    from troTHU import runtime_context as ctx
+    for _, attr_name in list(ctx._LEGACY_EXPORTS.values()):
+        try:
+            getattr(ctx, attr_name)
+        except Exception:
+            pass
+    try:
+        ctx.get_ssl_request_setting(True)
+    except Exception:
+        pass
+    try:
+        import probe_daemon  # noqa: F401
+    except Exception:
+        pass
+    gc.collect()
+    if hasattr(gc, "freeze"):
+        gc.freeze()
+
+
+def _run_forked_spec(spec: ProcessSpec) -> int:
+    os.chdir(ROOT)
+    os.environ.clear()
+    os.environ.update(spec.environment)
+    cmd = spec.command
+    if len(cmd) >= 3 and cmd[1] == "-m" and cmd[2] == "troTHU.tron":
+        from troTHU import runtime_context as ctx
+        sys.argv = ["troTHU.tron", *cmd[3:]]
+        return int(ctx.main(list(cmd[3:])) or 0)
+    if len(cmd) >= 2 and Path(cmd[1]).name == "probe_daemon.py":
+        import probe_daemon
+        sys.argv = [cmd[1], *cmd[2:]]
+        probe_daemon.main()
+        return 0
+    os.execvpe(cmd[0], list(cmd), spec.environment)
+    return 1
+
+
+class ForkedProcess:
+    """ subprocess.Popen-compatible handle for an os.fork() worker process. """
+
+    def __init__(self, pid: int, args: list[str]) -> None:
+        self.pid = pid
+        self.args = args
+        self.returncode: int | None = None
+
+    def poll(self) -> int | None:
+        if self.returncode is not None:
+            return self.returncode
+        try:
+            wpid, status = os.waitpid(self.pid, os.WNOHANG)
+        except ChildProcessError:
+            self.returncode = 0
+            return self.returncode
+        if wpid == 0:
+            return None
+        self.returncode = os.waitstatus_to_exitcode(status)
+        return self.returncode
+
+    def wait(self, timeout: float | None = None) -> int:
+        if self.poll() is not None:
+            return int(self.returncode or 0)
+        deadline = None if timeout is None else time.monotonic() + max(0.0, timeout)
+        while True:
+            code = self.poll()
+            if code is not None:
+                return code
+            if deadline is not None and time.monotonic() >= deadline:
+                raise subprocess.TimeoutExpired(self.args, timeout or 0)
+            time.sleep(0.05)
+
+    def terminate(self) -> None:
+        if self.returncode is None:
+            try:
+                os.kill(self.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+
+    def kill(self) -> None:
+        if self.returncode is None:
+            try:
+                os.kill(self.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+
 class ProcessSupervisor:
-    def __init__(self, specs: list[ProcessSpec]) -> None:
+    def __init__(self, specs: list[ProcessSpec], start_gap: float = 0.0, use_fork: bool | None = None) -> None:
         self.specs = specs
-        self.children: dict[str, subprocess.Popen] = {}
+        self.start_gap = max(0.0, start_gap)
+        self.use_fork = (hasattr(os, "fork") and os.environ.get("TRON_FORK_WORKERS", "1") != "0") if use_fork is None else use_fork
+        self.last_start: float | None = None
+        self.children: dict[str, subprocess.Popen | ForkedProcess] = {}
         self.failures: dict[str, int] = {}
         self.started_at: dict[str, float] = {}
         self.retry_at: dict[str, float] = {}
         self.lock = threading.Lock()
 
+    def _spawn(self, spec: ProcessSpec) -> subprocess.Popen | ForkedProcess:
+        if self.use_fork and subprocess.Popen is _ORIG_POPEN:
+            sys.stdout.flush()
+            sys.stderr.flush()
+            pid = os.fork()
+            if pid == 0:
+                try:
+                    for sig in (signal.SIGTERM, signal.SIGINT):
+                        signal.signal(sig, signal.SIG_DFL)
+                    code = _run_forked_spec(spec)
+                except SystemExit as exc:
+                    code = exc.code if isinstance(exc.code, int) else (0 if exc.code is None else 1)
+                except KeyboardInterrupt:
+                    code = 0
+                except BaseException:
+                    import traceback
+                    traceback.print_exc()
+                    code = 1
+                finally:
+                    try:
+                        sys.stdout.flush()
+                        sys.stderr.flush()
+                    except Exception:
+                        pass
+                os._exit(code)
+            return ForkedProcess(pid, list(spec.command))
+        return subprocess.Popen(list(spec.command), cwd=ROOT, env=spec.environment)
+
     def health(self) -> dict:
         with self.lock:
             running = sum(child.poll() is None for child in self.children.values())
-            return {"status": "ok" if running == len(self.specs) else "degraded",
+            # Processes still waiting for their staggered first start are not failures.
+            waiting = 0
+            if self.start_gap:
+                waiting = sum(1 for spec in self.specs
+                              if spec.name not in self.started_at and spec.name not in self.retry_at)
+            return {"status": "ok" if running + waiting == len(self.specs) else "degraded",
                     "expected_processes": len(self.specs), "running_processes": running}
 
     def add_spec(self, spec: ProcessSpec) -> bool:
@@ -167,14 +317,17 @@ class ProcessSupervisor:
                     print("{} exited ({}); retry in {}s.".format(spec.name, code, delay), flush=True)
                 if moment < self.retry_at.get(spec.name, 0):
                     continue
+                if self.start_gap and self.last_start is not None and moment - self.last_start < self.start_gap:
+                    continue
                 try:
-                    child = subprocess.Popen(list(spec.command), cwd=ROOT, env=spec.environment)
+                    child = self._spawn(spec)
                 except OSError:
                     self.retry_at[spec.name] = moment + 60
                     print("Could not start {}; retry in 60s.".format(spec.name), flush=True)
                     continue
                 self.children[spec.name] = child
                 self.started_at[spec.name] = moment
+                self.last_start = moment
                 print("Started {}.".format(spec.name), flush=True)
 
     def stop(self) -> None:
@@ -321,6 +474,7 @@ def make_handler(supervisor: ProcessSupervisor):
                     runtime_state = load_runtime_state(ROOT)
                     profiles = config.get("accounts", {}).get("profiles", {})
                     paused_set = get_paused_accounts()
+                    all_pending = list_pending_qr(ROOT)
                     accounts_data = []
                     for name in profiles:
                         p_summary = runtime_profile_summary(runtime_state, name)
@@ -328,7 +482,7 @@ def make_handler(supervisor: ProcessSupervisor):
                         checked_at = last_check.get("timestamp")
                         last_check["age_seconds"] = max(0, time.time() - checked_at) if isinstance(checked_at, (int, float)) and checked_at > 0 else None
                         cookie = ctx.cookie_report(name)
-                        pending = [item.to_dict() for item in list_pending_qr(ROOT) if item.profile == name]
+                        pending = [item.to_dict() for item in all_pending if item.profile == name]
                         is_paused = name in paused_set
                         accounts_data.append({
                             "name": name,
@@ -549,6 +703,7 @@ def make_handler(supervisor: ProcessSupervisor):
                     worker_env["TRON_PROFILE"] = name
                     worker_env.pop("TRON_USER", None)
                     worker_env.pop("TRON_PASS", None)
+                    tune_worker_env(worker_env, name)
                     spec = ProcessSpec("monitor:" + name, (sys.executable, "-m", "troTHU.tron", "run", "--no-input"), worker_env)
                     supervisor.add_spec(spec)
 
@@ -639,6 +794,7 @@ def make_handler(supervisor: ProcessSupervisor):
                             worker_env["TRON_PROFILE"] = target_acc.name
                             worker_env.pop("TRON_USER", None)
                             worker_env.pop("TRON_PASS", None)
+                            tune_worker_env(worker_env, target_acc.name)
                             spec = ProcessSpec("monitor:" + target_acc.name,
                                 (sys.executable, "-m", "troTHU.tron", "run", "--no-input"), worker_env)
                             supervisor.add_spec(spec)
@@ -755,7 +911,13 @@ def main(argv: list[str] | None = None) -> int:
                           "port": port, "connects": False}, ensure_ascii=False))
         return 0
 
-    supervisor = ProcessSupervisor(specs)
+    try:
+        start_gap = float(os.environ.get("TRON_START_STAGGER_SECONDS", DEFAULT_START_STAGGER))
+    except ValueError:
+        start_gap = DEFAULT_START_STAGGER
+    supervisor = ProcessSupervisor(specs, start_gap=start_gap)
+    if supervisor.use_fork:
+        preload_shared_runtime()
     server = ThreadingHTTPServer(("0.0.0.0", port), make_handler(supervisor))
     stop = threading.Event()
     previous_handlers = {}
