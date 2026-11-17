@@ -1636,7 +1636,11 @@
 
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+    <!-- ZXing-C++ (WASM): far stronger than ZXing-JS for small / dense / on-screen QR codes; works on iPhone Safari -->
+
+    <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.6/dist/iife/reader/index.js"></script>
 
 </head>
 
@@ -2019,8 +2023,6 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
     let isCameraOpen = false;
 
     let nativeDetector = null;
-
-    let nativeAnimId = null;
 
     let scanCooldown = false;
 
@@ -3455,31 +3457,247 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
 
 
-    async function runNativeVideoLoop() {
+    // ---------- Enhanced decoding (ZXing-C++ WASM + native BarcodeDetector) ----------
 
-        if (!isCameraOpen || !nativeDetector) return;
+    let zxingReady = false;
 
-        const video = document.querySelector("#reader video");
+    let zxingInitPromise = null;
 
-        if (video && video.readyState >= 2 && !video.paused && !video.ended) {
+    let enhancedLoopTimer = null;
 
-            try {
+    let enhancedBusy = false;
 
-                const codes = await nativeDetector.detect(video);
+    let enhancedFrameNo = 0;
 
-                if (codes && codes.length > 0 && codes[0].rawValue) {
+    const frameCanvas = document.createElement("canvas");
 
-                    onScanSuccess(codes[0].rawValue);
+    const frameCtx = frameCanvas.getContext("2d", { willReadFrequently: true });
 
-                }
 
-            } catch (e) {}
+
+    function initZXing() {
+
+        if (zxingInitPromise) return zxingInitPromise;
+
+        if (typeof ZXingWASM === "undefined") return Promise.resolve(false);
+
+        zxingInitPromise = ZXingWASM.prepareZXingModule({
+
+            overrides: {
+
+                locateFile: (path, prefix) => path.endsWith(".wasm")
+
+                    ? "https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.6/dist/reader/" + path
+
+                    : prefix + path
+
+            },
+
+            fireImmediately: true
+
+        }).then(() => {
+
+            zxingReady = true;
+
+            if (isCameraOpen && !enhancedLoopTimer) startEnhancedLoop();
+
+            return true;
+
+        }).catch(() => {
+
+            zxingInitPromise = null;
+
+            return false;
+
+        });
+
+        return zxingInitPromise;
+
+    }
+
+
+
+    async function zxingDecode(input, binarizer = "LocalAverage", extra = {}) {
+
+        if (!zxingReady) return null;
+
+        try {
+
+            const results = await ZXingWASM.readBarcodes(input, Object.assign({
+
+                formats: ["QRCode"],
+
+                tryHarder: true,
+
+                tryRotate: true,
+
+                tryInvert: true,
+
+                tryDownscale: true,
+
+                binarizer,
+
+                maxNumberOfSymbols: 1
+
+            }, extra));
+
+            const hit = (results || []).find(r => r.isValid && r.text);
+
+            return hit ? hit.text : null;
+
+        } catch (e) {
+
+            return null;
 
         }
 
-        if (isCameraOpen) {
+    }
 
-            nativeAnimId = requestAnimationFrame(runNativeVideoLoop);
+
+
+    async function nativeDecode(source) {
+
+        if (!nativeDetector) return null;
+
+        try {
+
+            const codes = await nativeDetector.detect(source);
+
+            const hit = (codes || []).find(c => c.rawValue);
+
+            return hit ? hit.rawValue : null;
+
+        } catch (e) {
+
+            return null;
+
+        }
+
+    }
+
+
+
+    // Copy the current video frame at native resolution into frameCanvas.
+
+    // cropRatio < 1 keeps only the centre; software zoom crops further, so the
+
+    // decoder sees the enlarged QR the user sees (CSS scale alone does not).
+
+    // Small crops are upscaled so a distant QR has enough pixels per module.
+
+    function grabVideoFrame(video, cropRatio, maxSide, minSide) {
+
+        const vw = video.videoWidth, vh = video.videoHeight;
+
+        if (!vw || !vh) return false;
+
+        const zoom = isHardwareZoom ? 1 : Math.max(1, currentZoom);
+
+        const cw = vw * cropRatio / zoom, ch = vh * cropRatio / zoom;
+
+        const sx = (vw - cw) / 2, sy = (vh - ch) / 2;
+
+        const longest = Math.max(cw, ch);
+
+        let scale = 1;
+
+        if (longest > maxSide) scale = maxSide / longest;
+
+        else if (longest < minSide) scale = Math.min(3, minSide / longest);
+
+        const ow = Math.max(1, Math.round(cw * scale)), oh = Math.max(1, Math.round(ch * scale));
+
+        if (frameCanvas.width !== ow) frameCanvas.width = ow;
+
+        if (frameCanvas.height !== oh) frameCanvas.height = oh;
+
+        frameCtx.imageSmoothingEnabled = scale < 1;
+
+        frameCtx.drawImage(video, sx, sy, cw, ch, 0, 0, ow, oh);
+
+        return true;
+
+    }
+
+
+
+    // Rotate strategies across frames: whole frame (QR anywhere), centre crops
+
+    // (QR small and far away, e.g. projector from the back row), and an
+
+    // alternate binarizer for glare / low contrast screens.
+
+    const ENHANCED_PLAN = [
+
+        { crop: 1.0, max: 1920, min: 0, bin: "LocalAverage" },
+
+        { crop: 0.5, max: 1600, min: 1200, bin: "LocalAverage" },
+
+        { crop: 0.75, max: 1600, min: 1200, bin: "GlobalHistogram" },
+
+        { crop: 0.33, max: 1600, min: 1200, bin: "LocalAverage" }
+
+    ];
+
+
+
+    async function enhancedFrameTick() {
+
+        if (!isCameraOpen || enhancedBusy) return;
+
+        const video = document.querySelector("#reader video");
+
+        if (!video || video.readyState < 2 || video.paused || video.ended) return;
+
+        enhancedBusy = true;
+
+        try {
+
+            const plan = ENHANCED_PLAN[enhancedFrameNo++ % ENHANCED_PLAN.length];
+
+            if (!grabVideoFrame(video, plan.crop, plan.max, plan.min)) return;
+
+            let text = await nativeDecode(frameCanvas);
+
+            if (!text && zxingReady) {
+
+                const img = frameCtx.getImageData(0, 0, frameCanvas.width, frameCanvas.height);
+
+                text = await zxingDecode(img, plan.bin);
+
+            }
+
+            if (text) onScanSuccess(text);
+
+        } finally {
+
+            enhancedBusy = false;
+
+        }
+
+    }
+
+
+
+    function startEnhancedLoop() {
+
+        stopEnhancedLoop();
+
+        if (!zxingReady && !nativeDetector) return;
+
+        enhancedLoopTimer = setInterval(enhancedFrameTick, 80);
+
+    }
+
+
+
+    function stopEnhancedLoop() {
+
+        if (enhancedLoopTimer) {
+
+            clearInterval(enhancedLoopTimer);
+
+            enhancedLoopTimer = null;
 
         }
 
@@ -3507,7 +3725,7 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
         const config = {
 
-            fps: 15,
+            fps: 10,
 
             qrbox: function(w, h) {
 
@@ -3521,15 +3739,25 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
             videoConstraints: deviceId
 
-                ? { deviceId: { exact: deviceId }, focusMode: "continuous" }
+                ? {
+
+                    deviceId: { exact: deviceId },
+
+                    width: { ideal: 1920 },
+
+                    height: { ideal: 1080 },
+
+                    focusMode: "continuous"
+
+                }
 
                 : {
 
                     facingMode: "environment",
 
-                    width: { ideal: 1280, max: 1920 },
+                    width: { ideal: 1920 },
 
-                    height: { ideal: 720, max: 1080 },
+                    height: { ideal: 1080 },
 
                     focusMode: "continuous"
 
@@ -3547,7 +3775,7 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
             loadAvailableCameras();
 
-            if (nativeDetector) runNativeVideoLoop();
+            startEnhancedLoop();
 
         };
 
@@ -3595,13 +3823,7 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
     function stopCameraScanner() {
 
-        if (nativeAnimId) {
-
-            cancelAnimationFrame(nativeAnimId);
-
-            nativeAnimId = null;
-
-        }
+        stopEnhancedLoop();
 
         if (html5QrcodeScanner) {
 
@@ -3902,6 +4124,14 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
 
     async function decodeImageRobust(blobOrFile) {
+
+        await initZXing();
+
+        const zxFull = await zxingDecode(blobOrFile, "LocalAverage", { tryDenoise: true })
+
+            || await zxingDecode(blobOrFile, "GlobalHistogram", { tryDenoise: true });
+
+        if (zxFull) return zxFull;
 
         const img = await createImageElement(blobOrFile);
 
@@ -4364,6 +4594,8 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
         setupMqtt();
 
         initNativeBarcodeDetector();
+
+        initZXing();
 
     });
 
