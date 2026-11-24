@@ -1778,6 +1778,10 @@
 
                 </div>
 
+                <button class="zoom-btn" onclick="capturePhotoNative()" title="用手機相機拍照辨識（遠距離較準）">拍照</button>
+
+                <input type="file" id="qrCaptureInput" accept="image/*" capture="environment" style="display:none;" onchange="handleQrFile(this)">
+
                 <button id="btnSwitchCam" class="zoom-btn" style="display:none;" onclick="switchCamera()" title="切換鏡頭">換鏡頭</button>
 
                 <button id="btnTorch" class="zoom-btn" style="display:none;" onclick="toggleTorch()">補光</button>
@@ -2053,6 +2057,12 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
     let isHardwareZoom = false;
 
     let torchActive = false;
+
+    let trackCaps = {};
+
+    let cameraOpenedAt = 0;
+
+    let farHintShown = false;
 
     let liveFeedbackMap = {};
 
@@ -3667,7 +3677,17 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
             }
 
-            if (text) onScanSuccess(text);
+            if (text) {
+
+                onScanSuccess(text);
+
+            } else if (!farHintShown && cameraOpenedAt && Date.now() - cameraOpenedAt > 12000) {
+
+                farHintShown = true;
+
+                showToast("掃不到嗎？按「拍照」用手機相機放大拍一張，遠距離辨識率高很多", "warn", 6000);
+
+            }
 
         } finally {
 
@@ -3776,6 +3796,8 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
             loadAvailableCameras();
 
             startEnhancedLoop();
+
+            setTimeout(updateZoomBadge, 1000);
 
         };
 
@@ -3897,6 +3919,12 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
         }
 
+        trackCaps = caps;
+
+        cameraOpenedAt = Date.now();
+
+        farHintShown = false;
+
         if (caps.zoom) {
 
             isHardwareZoom = true;
@@ -3947,9 +3975,7 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
         });
 
-        const badge = document.getElementById("zoomBadge");
-
-        if (badge) badge.innerText = `${currentZoom.toFixed(1)}x`;
+        updateZoomBadge();
 
 
 
@@ -3957,13 +3983,13 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
         if (isHardwareZoom && track) {
 
-            try {
+            if (await applyTrackState(track)) {
 
-                await track.applyConstraints({ advanced: [{ zoom: currentZoom }] });
+                setTimeout(updateZoomBadge, 600);
 
                 return;
 
-            } catch (e) {}
+            }
 
         }
 
@@ -4043,6 +4069,120 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
 
 
+    // applyConstraints() REPLACES the whole constraint set. Sending only
+
+    // {zoom} or only {torch} lets the browser drop to a low default resolution
+
+    // and makes the light reset the zoom (and vice versa), so always resend the
+
+    // current resolution together with zoom + torch + focus.
+
+    async function applyTrackState(track) {
+
+        if (!track) return false;
+
+        let settings = {};
+
+        try { settings = track.getSettings ? track.getSettings() : {}; } catch (e) {}
+
+        const adv = {};
+
+        if (isHardwareZoom) adv.zoom = currentZoom;
+
+        if (trackCaps.torch) adv.torch = torchActive;
+
+        if (Array.isArray(trackCaps.focusMode) && trackCaps.focusMode.includes("continuous")) adv.focusMode = "continuous";
+
+        const base = {};
+
+        if (settings.width && settings.height) {
+
+            base.width = { ideal: settings.width };
+
+            base.height = { ideal: settings.height };
+
+            if (settings.aspectRatio) base.aspectRatio = { ideal: settings.aspectRatio };
+
+        }
+
+        try {
+
+            await track.applyConstraints(Object.assign(base, { advanced: [adv] }));
+
+            return true;
+
+        } catch (e) {
+
+            try {
+
+                await track.applyConstraints({ advanced: [adv] });
+
+                return true;
+
+            } catch (e2) {
+
+                return false;
+
+            }
+
+        }
+
+    }
+
+
+
+    // Badge shows zoom and the real stream resolution, so a blurry, low
+
+    // resolution camera feed is visible at a glance (e.g. "3.0x · 1080p").
+
+    function updateZoomBadge() {
+
+        const badge = document.getElementById("zoomBadge");
+
+        if (!badge) return;
+
+        const video = document.querySelector("#reader video");
+
+        const res = video && video.videoWidth ? ` · ${Math.min(video.videoWidth, video.videoHeight)}p` : "";
+
+        badge.innerText = `${currentZoom.toFixed(1)}x${res}`;
+
+    }
+
+
+
+    // Open the phone's own camera app. It uses the telephoto lens and
+
+    // multi-frame processing that a browser video stream cannot, so a photo
+
+    // from the back row is far sharper than the live preview.
+
+    function capturePhotoNative() {
+
+        const input = document.getElementById("qrCaptureInput");
+
+        if (!input) return;
+
+        if (isCameraOpen) {
+
+            const track = getActiveVideoTrack();
+
+            if (track) { try { track.stop(); } catch (e) {} }
+
+            stopCameraScanner();
+
+            document.getElementById("scannerCollapse").style.display = "none";
+
+            isCameraOpen = false;
+
+        }
+
+        input.click();
+
+    }
+
+
+
     async function toggleTorch() {
 
         const track = getActiveVideoTrack();
@@ -4053,7 +4193,7 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
         try {
 
-            await track.applyConstraints({ advanced: [{ torch: torchActive }] });
+            if (!(await applyTrackState(track))) throw new Error("torch");
 
             document.getElementById("btnTorch").classList.toggle("active", torchActive);
 
