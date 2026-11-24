@@ -1778,9 +1778,7 @@
 
                 </div>
 
-                <button class="zoom-btn" onclick="capturePhotoNative()" title="用手機相機拍照辨識（遠距離較準）">拍照</button>
-
-                <input type="file" id="qrCaptureInput" accept="image/*" capture="environment" style="display:none;" onchange="handleQrFile(this)">
+                <button id="btnTeleLens" class="zoom-btn" onclick="selectTeleLens()" title="切換到長焦（望遠）鏡頭；沒有標示時依序切換後鏡頭">長鏡頭</button>
 
                 <button id="btnSwitchCam" class="zoom-btn" style="display:none;" onclick="switchCamera()" title="切換鏡頭">換鏡頭</button>
 
@@ -3369,7 +3367,33 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
     let currentCameraIndex = 0;
 
-    let selectedCameraDeviceId = null;
+    let selectedCameraDeviceId = (() => { try { return localStorage.getItem("scannerCameraId") || null; } catch (e) { return null; } })();
+
+    let selectedLensName = "";
+
+    let lensRestoreTried = false;
+
+
+
+    function rememberLens(deviceId, label) {
+
+        try {
+
+            localStorage.setItem("scannerCameraId", deviceId || "");
+
+            localStorage.setItem("scannerCameraLabel", label || "");
+
+        } catch (e) {}
+
+    }
+
+
+
+    function rememberedLensLabel() {
+
+        try { return localStorage.getItem("scannerCameraLabel") || ""; } catch (e) { return ""; }
+
+    }
 
 
 
@@ -3685,7 +3709,7 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
                 farHintShown = true;
 
-                showToast("掃不到嗎？按「拍照」用手機相機放大拍一張，遠距離辨識率高很多", "warn", 6000);
+                showToast("掃不到嗎？按「長鏡頭」切到望遠鏡頭再試，遠距離清楚很多", "warn", 6000);
 
             }
 
@@ -3819,9 +3843,27 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
         ).then(onReady).catch(() => {
 
+            if (deviceId) {
+
+                // Browsers re-issue camera ids between visits (Safari on purpose).
+
+                // Open the default back camera; setupZoomAndControls() then
+
+                // re-selects the remembered lens by its label.
+
+                selectedCameraDeviceId = null;
+
+                selectedLensName = "";
+
+                startCameraScanner(null);
+
+                return;
+
+            }
+
             html5QrcodeScanner.start(
 
-                cameraMode,
+                { facingMode: "environment" },
 
                 { fps: 12 },
 
@@ -3889,6 +3931,124 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
 
 
+    // ---------- Lens selection (telephoto) ----------
+
+    // Browsers expose each physical lens as a separate camera on most iPhones
+
+    // ("後置望遠相機" / "Back Telephoto Camera") and on many Android phones
+
+    // (often only as "camera2 N, facing back"). Opening the telephoto lens gives
+
+    // real optical magnification, unlike digital zoom on the main lens.
+
+    const TELE_RE = /tele|望遠|望远|長焦|长焦|遠攝|远摄/i;
+
+    const ULTRA_RE = /ultra|超廣角|超广角/i;
+
+    const MULTI_RE = /triple|dual|三鏡頭|三镜头|雙鏡頭|双镜头/i;
+
+    const FRONT_RE = /front|前置|前鏡頭|前镜头|facing front|user|selfie/i;
+
+
+
+    function lensNameFor(label, index, total) {
+
+        if (TELE_RE.test(label)) return "長鏡頭";
+
+        if (ULTRA_RE.test(label)) return "超廣角";
+
+        if (MULTI_RE.test(label)) return "多鏡頭";
+
+        return total > 1 ? `後鏡頭 ${index + 1}` : "主鏡頭";
+
+    }
+
+
+
+    async function listBackCameras() {
+
+        let devs = [];
+
+        try {
+
+            devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput");
+
+        } catch (e) {}
+
+        const back = devs.filter(d => !FRONT_RE.test(d.label || ""));
+
+        return back.length ? back : devs;
+
+    }
+
+
+
+    async function selectTeleLens() {
+
+        const cams = await listBackCameras();
+
+        if (cams.length < 2) {
+
+            showToast("這支手機的瀏覽器只開放一顆後鏡頭，無法切換長鏡頭；請用 2x/3x/5x 放大", "warn", 6000);
+
+            return;
+
+        }
+
+        const tele = cams.find(c => TELE_RE.test(c.label || ""));
+
+        let next;
+
+        if (tele && tele.deviceId !== selectedCameraDeviceId) {
+
+            next = tele;
+
+        } else {
+
+            // No lens is labelled telephoto (typical on Android): step through the
+
+            // back lenses; the user keeps the one that looks most zoomed in.
+
+            const activeTrack = getActiveVideoTrack();
+
+            let currentId = selectedCameraDeviceId;
+
+            try { currentId = (activeTrack && activeTrack.getSettings().deviceId) || currentId; } catch (e) {}
+
+            const i = cams.findIndex(c => c.deviceId === currentId);
+
+            next = cams[(i + 1) % cams.length];
+
+        }
+
+        const idx = cams.indexOf(next);
+
+        selectedCameraDeviceId = next.deviceId;
+
+        selectedLensName = lensNameFor(next.label || "", idx, cams.length);
+
+        rememberLens(next.deviceId, next.label);
+
+        lensRestoreTried = true;
+
+        const hint = tele ? "" : "（畫面最大的那顆就是長鏡頭，會自動記住）";
+
+        showToast(`切換到 ${selectedLensName}（${idx + 1}/${cams.length}）${hint}`, "loading", 3000);
+
+        if (isCameraOpen) {
+
+            await startCameraScanner(next.deviceId);
+
+        } else {
+
+            await toggleCameraView();
+
+        }
+
+    }
+
+
+
     async function switchCamera() {
 
         if (!isCameraOpen || availableCameras.length <= 1) return;
@@ -3898,6 +4058,12 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
         const nextCam = availableCameras[currentCameraIndex];
 
         selectedCameraDeviceId = nextCam.id;
+
+        selectedLensName = lensNameFor(nextCam.label || "", currentCameraIndex, availableCameras.length);
+
+        rememberLens(nextCam.id, nextCam.label);
+
+        lensRestoreTried = true;
 
         showToast(`切換鏡頭: ${nextCam.label || ('相機 ' + (currentCameraIndex + 1))}`, "loading", 1500);
 
@@ -3920,6 +4086,48 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
         }
 
         trackCaps = caps;
+
+        const wantLabel = rememberedLensLabel();
+
+        if (wantLabel && !lensRestoreTried && track && track.label !== wantLabel) {
+
+            lensRestoreTried = true;
+
+            listBackCameras().then(cams => {
+
+                const i = cams.findIndex(c => c.label === wantLabel);
+
+                if (i >= 0 && isCameraOpen) {
+
+                    selectedCameraDeviceId = cams[i].deviceId;
+
+                    selectedLensName = lensNameFor(wantLabel, i, cams.length);
+
+                    startCameraScanner(selectedCameraDeviceId);
+
+                }
+
+            });
+
+        }
+
+        if (selectedCameraDeviceId && !selectedLensName) {
+
+            listBackCameras().then(cams => {
+
+                const i = cams.findIndex(c => c.deviceId === selectedCameraDeviceId);
+
+                if (i >= 0) {
+
+                    selectedLensName = lensNameFor(cams[i].label || "", i, cams.length);
+
+                    updateZoomBadge();
+
+                }
+
+            });
+
+        }
 
         cameraOpenedAt = Date.now();
 
@@ -4145,39 +4353,9 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
         const res = video && video.videoWidth ? ` · ${Math.min(video.videoWidth, video.videoHeight)}p` : "";
 
-        badge.innerText = `${currentZoom.toFixed(1)}x${res}`;
+        const lens = selectedLensName ? `${selectedLensName} · ` : "";
 
-    }
-
-
-
-    // Open the phone's own camera app. It uses the telephoto lens and
-
-    // multi-frame processing that a browser video stream cannot, so a photo
-
-    // from the back row is far sharper than the live preview.
-
-    function capturePhotoNative() {
-
-        const input = document.getElementById("qrCaptureInput");
-
-        if (!input) return;
-
-        if (isCameraOpen) {
-
-            const track = getActiveVideoTrack();
-
-            if (track) { try { track.stop(); } catch (e) {} }
-
-            stopCameraScanner();
-
-            document.getElementById("scannerCollapse").style.display = "none";
-
-            isCameraOpen = false;
-
-        }
-
-        input.click();
+        badge.innerText = `${lens}${currentZoom.toFixed(1)}x${res}`;
 
     }
 
