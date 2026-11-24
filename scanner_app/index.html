@@ -2232,7 +2232,13 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
         document.getElementById("activePromptCamera").hidden = number;
 
-        document.getElementById("activePromptHint").innerText = `${prompt.profile} · 點名 #${prompt.rollcallId}。送出後會確認你的個人簽到狀態。`;
+        const group = activePromptGroup(prompt);
+
+        document.getElementById("activePromptHint").innerText = group.length > 1
+
+            ? `點名 #${prompt.rollcallId}：送出後會依序幫 ${group.length} 個帳號簽到（${group.map(item => item.profile).join("、")}）。`
+
+            : `${prompt.profile} · 點名 #${prompt.rollcallId}。送出後會確認你的個人簽到狀態。`;
 
     }
 
@@ -2336,6 +2342,84 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
 
 
+    // Accounts in the same class share one rollcall: the QR and the teacher's
+
+    // 4-digit code are class-wide. Send the input to every account waiting on
+
+    // the same rollcall, not only the one shown in the prompt.
+
+    function activePromptGroup(prompt) {
+
+        if (!prompt) return [];
+
+        const group = activePromptCandidates.filter(item => item.type === prompt.type && item.rollcallId === prompt.rollcallId);
+
+        if (!group.some(item => item.key === prompt.key)) group.unshift(prompt);
+
+        return group;
+
+    }
+
+
+
+    async function submitPromptFor(target, payload) {
+
+        try {
+
+            const response = await fetch("/api/submit", {
+
+                method: "POST",
+
+                headers: {"Content-Type": "application/json"},
+
+                body: JSON.stringify({
+
+                    profile: target.profile,
+
+                    payload,
+
+                    expectedType: target.type,
+
+                    expectedRollcallId: target.rollcallId
+
+                })
+
+            });
+
+            const result = await response.json();
+
+            const detail = (result.details || []).find(item => item.profile === target.profile)?.result || {};
+
+            const message = detail.reply || result.message || "未能確認簽到結果。";
+
+            liveFeedbackMap[target.profile] = {
+
+                rollcallId: target.rollcallId,
+
+                text: message, state: detail.ok ? "success" : "warn", time: new Date().toLocaleTimeString()
+
+            };
+
+            addLog(`${target.profile} 點名 #${target.rollcallId}：${message}`, detail.ok ? "ok" : "err");
+
+            if (detail.ok) confirmedActivePrompts.add(target.key);
+
+            return { profile: target.profile, ok: !!detail.ok, message };
+
+        } catch (_error) {
+
+            const message = "連線中斷，結果未明；請先查看官方點名紀錄。";
+
+            addLog(`${target.profile} 點名 #${target.rollcallId}：${message}`, "err");
+
+            return { profile: target.profile, ok: false, message };
+
+        }
+
+    }
+
+
+
     async function submitActivePrompt(payloadOverride = null) {
 
         const prompt = selectedActivePrompt();
@@ -2364,63 +2448,53 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
         }
 
+        const targets = activePromptGroup(prompt);
+
         activePromptSubmitting = true;
 
         renderActivePrompt();
 
-        feedback.innerText = "送出中，正在確認個人狀態…";
+        input.value = "";
+
+        const results = [];
+
+        let summary = "";
 
         try {
 
-            const response = await fetch("/api/submit", {
+            // One account at a time: the server switches a shared active
 
-                method: "POST",
+            // profile per submission, so parallel requests could cross accounts.
 
-                headers: {"Content-Type": "application/json"},
+            for (const [i, target] of targets.entries()) {
 
-                body: JSON.stringify({
+                feedback.innerText = targets.length > 1
 
-                    profile: prompt.profile,
+                    ? `送出中 ${i + 1}/${targets.length}：${target.profile}…`
 
-                    payload,
+                    : "送出中，正在確認個人狀態…";
 
-                    expectedType: prompt.type,
+                results.push(await submitPromptFor(target, payload));
 
-                    expectedRollcallId: prompt.rollcallId
+            }
 
-                })
+            const okCount = results.filter(r => r.ok).length;
 
-            });
+            if (results.length === 1) {
 
-            const result = await response.json();
+                summary = results[0].message;
 
-            const detail = (result.details || []).find(item => item.profile === prompt.profile)?.result || {};
+            } else {
 
-            const message = detail.reply || result.message || "未能確認簽到結果。";
+                summary = `${okCount}/${results.length} 個帳號已確認：` + results.map(r => `${r.profile} ${r.ok ? "✓" : "✗"}`).join("、");
 
-            input.value = "";
+                if (okCount < results.length) summary += "。失敗的帳號請再掃一次（只會重送未成功的）。";
 
-            feedback.innerText = message;
+            }
 
-            liveFeedbackMap[prompt.profile] = {
-                rollcallId: prompt.rollcallId,
-                text: message, state: detail.ok ? "success" : "warn", time: new Date().toLocaleTimeString()
+            feedback.innerText = summary;
 
-            };
-
-            addLog(`${prompt.profile} 點名 #${prompt.rollcallId}：${message}`, detail.ok ? "ok" : "err");
-
-            showToast(message, detail.ok ? "success" : "error", 5000);
-
-            if (detail.ok) confirmedActivePrompts.add(prompt.key);
-
-        } catch (_error) {
-
-            input.value = "";
-
-            feedback.innerText = "連線中斷，結果未明；請先查看官方點名紀錄。";
-
-            showToast(feedback.innerText, "error", 5000);
+            showToast(summary, okCount === results.length ? "success" : "error", 7000);
 
         } finally {
 
@@ -2429,6 +2503,10 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
             await fetchStatus(true);
 
             updateActivePrompt(currentAccountsData);
+
+            // the refresh above clears the box when the prompt changes; keep the result visible
+
+            if (summary) feedback.innerText = summary;
 
         }
 
@@ -4747,7 +4825,23 @@ RollcallRelay = type=http-request,pattern=^https?:\/\/.*\/api\/rollcall\/[0-9]+\
 
         if (qrPrompts.length > 1) {
 
-            showToast("請先選擇要提交的 QR 點名帳號", "error", 4000);
+            const sameRollcall = qrPrompts.every(item => item.rollcallId === qrPrompts[0].rollcallId);
+
+            if (sameRollcall) {
+
+                selectActivePrompt(qrPrompts[0].key);
+
+                showToast(`掃描成功，正在幫 ${qrPrompts.length} 個帳號送出 QR 點名…`, "loading", 4000);
+
+                addLog(`掃描到 QR，依序送給 ${qrPrompts.length} 個帳號`, "ok");
+
+                submitActivePrompt(decodedText);
+
+                return;
+
+            }
+
+            showToast("有不同課程的 QR 點名，請先在上方選擇要提交的帳號", "error", 4000);
 
             return;
 
